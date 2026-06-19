@@ -1,10 +1,11 @@
-"""三态身份依赖:widget(API key)/ SIWE(JWT)/ 匿名会话。
+"""Three-way identity dependency: widget (API key) / SIWE (JWT) / anonymous session.
 
-最小可用版:
-- X-API-Key 命中 WIDGET_API_KEYS(逗号分隔 env)→ widget 身份。
-- Authorization: Bearer <jwt> → siwe 身份(完整 SIWE 验签留待 M8 前端联调,这里仅取 sub)。
-- 否则匿名:用 X-Session-Id(无则新生成)派生稳定 user_id。
-限流分档可按 identity.kind 实现(后续)。
+Minimal viable version:
+- X-API-Key matching WIDGET_API_KEYS (comma-separated env) -> widget identity.
+- Authorization: Bearer <jwt> -> siwe identity (full SIWE signature verification deferred to M8 frontend
+  integration; here we only take sub).
+- Otherwise anonymous: derive a stable user_id from X-Session-Id (newly generated if absent).
+Rate-limit tiers can be implemented per identity.kind (later).
 """
 
 import os
@@ -36,7 +37,7 @@ async def get_identity(
         return Identity(kind="widget", user_id=f"widget:{x_api_key[:8]}", session_id=x_api_key[:8])
 
     if authorization and authorization.lower().startswith("bearer "):
-        # TODO(M8): 校验 SIWE 签发的 JWT;此处先取 token 末段作占位 user_id
+        # TODO(M8): validate the SIWE-issued JWT; for now take the token tail as a placeholder user_id
         token = authorization.split(" ", 1)[1]
         return Identity(kind="siwe", user_id=f"siwe:{token[-12:]}", session_id=token[-12:])
 

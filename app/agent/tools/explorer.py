@@ -1,7 +1,7 @@
-"""Explorer 工具:纯 RPC、按交易哈希/地址的只读查询(跨 5 链通用)。
+"""Explorer tools: pure-RPC, read-only queries by transaction hash/address (common across all 5 chains).
 
-不依赖第三方索引器。decode 用 4byte.directory 反查 selector;
-日志解码内置 ERC20 Transfer(其余按原始 topic 返回)。
+No third-party indexer dependency. Decoding uses 4byte.directory to look up the selector;
+log decoding has built-in ERC20 Transfer (others returned by raw topic).
 """
 
 import httpx
@@ -28,7 +28,7 @@ def _lookup_4byte(selector: str) -> list[str]:
             timeout=settings.http_timeout,
         )
         results = r.json().get("results", [])
-        # 4byte 可能有多条;按 id 升序(越早注册越可能是真实签名)
+        # 4byte may return several; sort by ascending id (earlier registration is more likely the real signature)
         results.sort(key=lambda x: x.get("id", 0))
         return [x["text_signature"] for x in results][:5]
     except Exception:
@@ -37,9 +37,9 @@ def _lookup_4byte(selector: str) -> list[str]:
 
 @tool
 def get_transaction(tx_hash: str, chain: str = "ethereum") -> str:
-    """按交易哈希获取交易基本信息(from/to/native value/gas/nonce/区块/selector)。
+    """Get basic transaction info by hash (from/to/native value/gas/nonce/block/selector).
 
-    chain: ethereum/bsc/arbitrum/base/optimism(默认 ethereum)。
+    chain: ethereum/bsc/arbitrum/base/optimism (default ethereum).
     """
     chain_key, err = resolve_chain_or_error(chain)
     if err:
@@ -47,11 +47,11 @@ def get_transaction(tx_hash: str, chain: str = "ethereum") -> str:
     try:
         tx = get_web3(chain_key).eth.get_transaction(tx_hash)
     except Exception as e:
-        return f"查询交易失败({chain_key}):{e}"
+        return f"Failed to fetch transaction ({chain_key}): {e}"
     data = Web3.to_hex(tx["input"])
     selector = data[:10] if len(data) >= 10 else None
     return (
-        f"链={chain_key} 区块={tx['blockNumber']}\n"
+        f"chain={chain_key} block={tx['blockNumber']}\n"
         f"from={tx['from']}\nto={tx['to']}\n"
         f"value={Web3.from_wei(tx['value'], 'ether')} (native) nonce={tx['nonce']}\n"
         f"gas={tx['gas']} gasPrice={tx['gasPrice']}\n"
@@ -61,9 +61,9 @@ def get_transaction(tx_hash: str, chain: str = "ethereum") -> str:
 
 @tool
 def decode_transaction(tx_hash: str, chain: str = "ethereum") -> str:
-    """解码交易 input 的函数选择器:经 4byte.directory 反查可能的函数签名。
+    """Decode the function selector of a transaction's input via 4byte.directory to find candidate signatures.
 
-    chain: ethereum/bsc/arbitrum/base/optimism。
+    chain: ethereum/bsc/arbitrum/base/optimism.
     """
     chain_key, err = resolve_chain_or_error(chain)
     if err:
@@ -71,23 +71,23 @@ def decode_transaction(tx_hash: str, chain: str = "ethereum") -> str:
     try:
         tx = get_web3(chain_key).eth.get_transaction(tx_hash)
     except Exception as e:
-        return f"查询交易失败({chain_key}):{e}"
+        return f"Failed to fetch transaction ({chain_key}): {e}"
     data = Web3.to_hex(tx["input"])
     if len(data) < 10:
-        return "无 input data(可能是原生币转账 EOA→EOA,无函数调用)。"
+        return "No input data (likely a native transfer EOA->EOA, no function call)."
     selector = data[:10]
     sigs = _lookup_4byte(selector)
     return (
-        f"selector={selector}\n候选函数签名(4byte,可能多义):{sigs or '未找到'}\n"
-        f"input 长度={len(data)} hex 字符(参数解码需合约 ABI)"
+        f"selector={selector}\ncandidate function signatures (4byte, may be ambiguous): {sigs or 'none found'}\n"
+        f"input length={len(data)} hex chars (argument decoding requires the contract ABI)"
     )
 
 
 @tool
 def get_transaction_receipt_logs(tx_hash: str, chain: str = "ethereum") -> str:
-    """获取交易收据与事件日志:状态/gasUsed,并解码 ERC20 Transfer(其余按原始 topic 返回)。
+    """Get the receipt and event logs: status/gasUsed, decoding ERC20 Transfer (others by raw topic).
 
-    chain: ethereum/bsc/arbitrum/base/optimism。
+    chain: ethereum/bsc/arbitrum/base/optimism.
     """
     chain_key, err = resolve_chain_or_error(chain)
     if err:
@@ -95,9 +95,9 @@ def get_transaction_receipt_logs(tx_hash: str, chain: str = "ethereum") -> str:
     try:
         receipt = get_web3(chain_key).eth.get_transaction_receipt(tx_hash)
     except Exception as e:
-        return f"查询收据失败({chain_key}):{e}"
+        return f"Failed to fetch receipt ({chain_key}): {e}"
     status = "success" if receipt["status"] == 1 else "failed"
-    lines = [f"链={chain_key} status={status} gasUsed={receipt['gasUsed']} 日志数={len(receipt['logs'])}"]
+    lines = [f"chain={chain_key} status={status} gasUsed={receipt['gasUsed']} logs={len(receipt['logs'])}"]
     for i, lg in enumerate(receipt["logs"][:20]):
         topics = [Web3.to_hex(t) for t in lg["topics"]]
         if topics and topics[0].lower() == _TRANSFER_TOPIC and len(topics) == 3:
@@ -109,27 +109,27 @@ def get_transaction_receipt_logs(tx_hash: str, chain: str = "ethereum") -> str:
         else:
             lines.append(f"  [{i}] {lg['address']} topic0={topics[0] if topics else None}")
     if len(receipt["logs"]) > 20:
-        lines.append(f"  …(共 {len(receipt['logs'])} 条,仅显示前 20)")
+        lines.append(f"  ...({len(receipt['logs'])} total, showing first 20)")
     return "\n".join(lines)
 
 
 @tool
 def resolve_ens(name: str) -> str:
-    """把 ENS 域名(如 vitalik.eth)解析为地址。走主网,返回的地址全链通用。"""
+    """Resolve an ENS name (e.g. vitalik.eth) to an address. Uses mainnet; the address works on all chains."""
     if not name.lower().endswith(".eth"):
-        return f"{name} 不是 ENS 域名(应以 .eth 结尾)。"
+        return f"{name} is not an ENS name (must end with .eth)."
     try:
         addr = get_ens_web3().ens.address(name)
     except Exception as e:
-        return f"ENS 解析失败:{e}"
-    return f"{name} -> {addr}" if addr else f"{name} 未解析到地址(无 addr 记录)。"
+        return f"ENS resolution failed: {e}"
+    return f"{name} -> {addr}" if addr else f"{name} did not resolve to an address (no addr record)."
 
 
 @tool
 def get_balances(address: str, chain: str = "ethereum") -> str:
-    """查询地址的原生币余额。
+    """Query an address's native coin balance.
 
-    chain: ethereum/bsc/arbitrum/base/optimism。(ERC20 全量余额需索引器,暂不支持)
+    chain: ethereum/bsc/arbitrum/base/optimism. (Full ERC20 balances need an indexer; not supported yet.)
     """
     chain_key, err = resolve_chain_or_error(chain)
     if err:
@@ -137,11 +137,11 @@ def get_balances(address: str, chain: str = "ethereum") -> str:
     try:
         bal = get_web3(chain_key).eth.get_balance(Web3.to_checksum_address(address))
     except Exception as e:
-        return f"查询余额失败({chain_key}):{e}"
-    return f"{address} 在 {chain_key} 原生余额 = {Web3.from_wei(bal, 'ether')}"
+        return f"Failed to fetch balance ({chain_key}): {e}"
+    return f"{address} native balance on {chain_key} = {Web3.from_wei(bal, 'ether')}"
 
 
-# 注册(均为只读、跨所有受支持链)
+# Register (all read-only, across all supported chains)
 register(make_spec(get_transaction, "explorer", ALL_CHAINS))
 register(make_spec(decode_transaction, "explorer", ALL_CHAINS))
 register(make_spec(get_transaction_receipt_logs, "explorer", ALL_CHAINS))

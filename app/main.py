@@ -1,7 +1,7 @@
-"""FastAPI 入口:SSE 流式对话 + interrupt resume + 三态身份。
+"""FastAPI entry point: SSE streaming chat + interrupt resume + three-way identity.
 
-lifespan 内打开异步 Postgres checkpointer 并编译 graph(单例)。
-SSE 事件:start / token / tool_call / tool_result / interrupt / done / error。
+The lifespan opens the async Postgres checkpointer and compiles the graph (singleton).
+SSE events: start / token / tool_call / tool_result / interrupt / done / error.
 """
 
 import json
@@ -53,7 +53,7 @@ def _sse(event: str, payload: dict) -> dict:
 
 
 def _text_of(content) -> str:
-    """从消息 content 提取纯文本(Anthropic 可能返回内容块列表)。"""
+    """Extract plain text from message content (Anthropic may return a list of content blocks)."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -62,19 +62,20 @@ def _text_of(content) -> str:
 
 
 def _scoped_thread(identity: Identity, thread_id: str | None) -> str:
-    """线程归属隔离:已有 thread 必须属于当前身份,否则新建带身份前缀的 thread。"""
+    """Thread ownership isolation: an existing thread must belong to the current identity,
+    otherwise create a new thread prefixed with the identity."""
     if thread_id:
         if not thread_id.startswith(f"{identity.user_id}::"):
-            raise HTTPException(status_code=403, detail="thread 不属于当前身份")
+            raise HTTPException(status_code=403, detail="thread does not belong to the current identity")
         return thread_id
     return f"{identity.user_id}::{uuid.uuid4().hex[:16]}"
 
 
 async def _event_stream(graph, payload, config, thread_id: str):
-    """以 updates 模式映射为 SSE:tool_call / tool_result / token(助手回复)/ interrupt。
+    """Map updates mode to SSE: tool_call / tool_result / token (assistant reply) / interrupt.
 
-    注:节点用同步非流式 invoke,故助手回复整条作为一个 token 事件;
-    真正的逐 token 流式需把节点改成模型流式调用(后续增强)。
+    Note: nodes use synchronous non-streaming invoke, so the assistant reply is emitted as a single token event;
+    true token-by-token streaming would require switching nodes to streaming model calls (future enhancement).
     """
     yield _sse("start", {"thread_id": thread_id})
     try:
@@ -131,7 +132,7 @@ async def resume(req: ResumeRequest, identity: Identity = Depends(get_identity))
 
 @app.get("/v1/threads/{thread_id}/history")
 async def history(thread_id: str, identity: Identity = Depends(get_identity)):
-    _scoped_thread(identity, thread_id)  # 归属校验
+    _scoped_thread(identity, thread_id)  # ownership check
     state = await app.state.graph.aget_state({"configurable": {"thread_id": thread_id}})
     msgs = state.values.get("messages", []) if state else []
     return {

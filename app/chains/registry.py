@@ -1,7 +1,7 @@
-"""受支持 EVM 链注册表。支持范围的真值来源。
+"""Supported EVM chain registry. Source of truth for the supported scope.
 
-加新链 = 在 `_DEFAULTS` 增一行 + `_ENV_KEYS` 一个覆盖名即可。
-默认用公共 RPC(publicnode),可用对应 env 覆盖为私有节点。
+Adding a chain = one row in `_DEFAULTS` + one override name in `_ENV_KEYS`.
+Defaults use public RPC (publicnode); override to a private node via the matching env var.
 """
 
 import os
@@ -10,13 +10,13 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Chain:
-    key: str  # 规范键:ethereum/bsc/arbitrum/base/optimism
-    name: str  # 展示名
+    key: str  # canonical key: ethereum/bsc/arbitrum/base/optimism
+    name: str  # display name
     chain_id: int
     rpc_url: str
 
 
-# key -> (展示名, chainId, 默认公共 RPC)
+# key -> (display name, chainId, default public RPC)
 _DEFAULTS: dict[str, tuple[str, int, str]] = {
     "ethereum": ("Ethereum", 1, "https://ethereum-rpc.publicnode.com"),
     "bsc": ("BNB Smart Chain", 56, "https://bsc-rpc.publicnode.com"),
@@ -25,7 +25,7 @@ _DEFAULTS: dict[str, tuple[str, int, str]] = {
     "optimism": ("OP Mainnet", 10, "https://optimism-rpc.publicnode.com"),
 }
 
-# 覆盖用的环境变量名(私有 RPC 时设置)
+# Environment variable names for overrides (set when using a private RPC)
 _ENV_KEYS: dict[str, str] = {
     "ethereum": "ETH_RPC_URL",
     "bsc": "BNB_RPC_URL",
@@ -34,7 +34,7 @@ _ENV_KEYS: dict[str, str] = {
     "optimism": "OPT_RPC_URL",
 }
 
-# 用户可能用的别名 -> 规范键
+# Aliases users might type -> canonical key
 _ALIASES: dict[str, str] = {
     "eth": "ethereum",
     "mainnet": "ethereum",
@@ -62,7 +62,7 @@ def _build() -> dict[str, Chain]:
 
 CHAINS: dict[str, Chain] = _build()
 
-# ENS 解析固定走主网(简单版:不做 ENSIP-11 多链记录)
+# ENS resolution always uses mainnet (simple version: no ENSIP-11 multi-chain records)
 ENS_RPC_URL: str = os.getenv("ENS_RPC_URL", CHAINS["ethereum"].rpc_url)
 
 
@@ -71,7 +71,7 @@ def supported_keys() -> tuple[str, ...]:
 
 
 def normalize_chain(key: str | None) -> str:
-    """把别名/大小写规范化为标准键;空值回落默认链。"""
+    """Normalize aliases/casing to the canonical key; empty values fall back to the default chain."""
     if not key:
         return DEFAULT_CHAIN
     k = key.strip().lower()
@@ -79,7 +79,7 @@ def normalize_chain(key: str | None) -> str:
 
 
 def get_chain(key: str | None) -> Chain | None:
-    """取链配置;不支持返回 None(供约束/拒绝判断)。"""
+    """Get the chain config; returns None if unsupported (for constraint/refusal checks)."""
     return CHAINS.get(normalize_chain(key))
 
 

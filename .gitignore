@@ -18,3 +18,5 @@ wheels/
 # AI Files
 CLAUDE.md
 PROGRESS.md
+
+.ruff_*

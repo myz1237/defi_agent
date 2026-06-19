@@ -1,7 +1,7 @@
-"""本地 CLI:与 DeFi Agent 多轮对话(InMemorySaver + interrupt 续跑)。
+"""Local CLI: multi-turn chat with the DeFi Agent (InMemorySaver + interrupt resume).
 
-运行:        uv run python scripts/chat.py
-管道冒烟:    printf '问题1\n问题2\n' | uv run python scripts/chat.py
+Run:            uv run python scripts/chat.py
+Pipe smoke test: printf 'question1\nquestion2\n' | uv run python scripts/chat.py
 """
 
 import pathlib
@@ -17,7 +17,7 @@ from langgraph.types import Command  # noqa: E402
 from app.agent.checkpointer import get_checkpointer  # noqa: E402
 from app.agent.graph import build_graph  # noqa: E402
 
-# 固定 thread_id:同一 thread 跨进程共享会话历史(Postgres checkpointer 下持久)
+# Fixed thread_id: the same thread shares conversation history across processes (persistent with Postgres checkpointer)
 CONFIG = {"configurable": {"thread_id": os.getenv("CLI_THREAD_ID", "cli-session")}}
 
 
@@ -30,13 +30,13 @@ def _print_updates(chunk: dict) -> None:
             tool_calls = getattr(m, "tool_calls", None)
             if mtype == "ai" and tool_calls:
                 for tc in tool_calls:
-                    print(f"  · 调用工具 {tc['name']}({tc.get('args', {})})")
+                    print(f"  - calling tool {tc['name']}({tc.get('args', {})})")
             elif mtype == "ai" and m.content:
-                print(f"\n助手> {m.content}")
+                print(f"\nAssistant> {m.content}")
             elif mtype == "tool":
                 content = m.content if isinstance(m.content, str) else str(m.content)
-                preview = content if len(content) <= 400 else content[:400] + " …"
-                print(f"  · 工具[{getattr(m, 'name', '')}] -> {preview}")
+                preview = content if len(content) <= 400 else content[:400] + " ..."
+                print(f"  - tool[{getattr(m, 'name', '')}] -> {preview}")
 
 
 def _run(graph, payload) -> None:
@@ -47,9 +47,9 @@ def _run(graph, payload) -> None:
                 intr = chunk["__interrupt__"][0]
                 q = intr.value.get("question") if isinstance(intr.value, dict) else str(intr.value)
                 try:
-                    answer = input(f"\n[需要补充] {q}\n你> ").strip()
+                    answer = input(f"\n[input needed] {q}\nyou> ").strip()
                 except EOFError:
-                    print("\n(无更多输入,退出)")
+                    print("\n(no more input, exiting)")
                     return
                 payload = Command(resume=answer)
                 interrupted = True
@@ -64,14 +64,14 @@ def main() -> None:
     with get_checkpointer() as cp:
         graph = builder.compile(checkpointer=cp)
         print(
-            f"DeFi Agent CLI(checkpointer={type(cp).__name__}, thread={CONFIG['configurable']['thread_id']})"
-            " — 输入钱包/交易相关问题;Ctrl-D 退出"
+            f"DeFi Agent CLI (checkpointer={type(cp).__name__}, thread={CONFIG['configurable']['thread_id']})"
+            " - ask wallet/transaction questions; Ctrl-D to exit"
         )
         while True:
             try:
-                user = input("\n你> ").strip()
+                user = input("\nyou> ").strip()
             except EOFError:
-                print("\n再见")
+                print("\nGoodbye")
                 break
             if not user:
                 continue

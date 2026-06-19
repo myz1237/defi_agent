@@ -1,4 +1,4 @@
-"""Morpho 工具:经官方 GraphQL(blue-api.morpho.org)查询仓位与市场。"""
+"""Morpho tools: query positions and markets via the official GraphQL (blue-api.morpho.org)."""
 
 import httpx
 from langchain_core.tools import tool
@@ -46,9 +46,9 @@ def _usd(x) -> str:
 
 @tool
 def morpho_get_positions(address: str, chain: str = "ethereum") -> str:
-    """查询某地址在 Morpho 的借贷仓位(供应/借出/抵押,美元计)。
+    """Query an address's Morpho lending positions (supply/borrow/collateral, in USD).
 
-    chain: Morpho 部署的链(如 ethereum、base)。
+    chain: a chain where Morpho is deployed (e.g. ethereum, base).
     """
     chain_key, err = resolve_chain_or_error(chain)
     if err:
@@ -57,7 +57,7 @@ def morpho_get_positions(address: str, chain: str = "ethereum") -> str:
     try:
         data = _gql(_POSITIONS_QUERY, {"address": address, "chainId": chain_id})
     except Exception as e:
-        return f"Morpho 仓位查询失败:{e}"
+        return f"Morpho positions query failed: {e}"
 
     positions = ((data.get("userByAddress") or {}).get("marketPositions")) or []
     active = [
@@ -66,17 +66,17 @@ def morpho_get_positions(address: str, chain: str = "ethereum") -> str:
         if any((p.get("state") or {}).get(k) for k in ("supplyAssetsUsd", "borrowAssetsUsd", "collateralUsd"))
     ]
     if not active:
-        return f"{address} 在 {chain_key} 的 Morpho 无活跃仓位。"
+        return f"{address} has no active Morpho positions on {chain_key}."
 
-    lines = [f"{address} 在 {chain_key} 的 Morpho 仓位({len(active)} 个市场):"]
+    lines = [f"{address} Morpho positions on {chain_key} ({len(active)} markets):"]
     for p in active:
         m = p.get("market") or {}
         st = p.get("state") or {}
         loan = (m.get("loanAsset") or {}).get("symbol")
         coll = (m.get("collateralAsset") or {}).get("symbol")
         lines.append(
-            f"  {loan}/{coll}: 供应={_usd(st.get('supplyAssetsUsd'))} "
-            f"借出={_usd(st.get('borrowAssetsUsd'))} 抵押={_usd(st.get('collateralUsd'))} "
+            f"  {loan}/{coll}: supply={_usd(st.get('supplyAssetsUsd'))} "
+            f"borrow={_usd(st.get('borrowAssetsUsd'))} collateral={_usd(st.get('collateralUsd'))} "
             f"[marketId={m.get('marketId')}]"
         )
     return "\n".join(lines)
@@ -84,9 +84,9 @@ def morpho_get_positions(address: str, chain: str = "ethereum") -> str:
 
 @tool
 def morpho_get_market(market_id: str, chain: str = "ethereum") -> str:
-    """按 marketId(0x… 市场唯一 id)查询 Morpho 市场数据(APY/LLTV/规模/利用率)。
+    """Query Morpho market data by marketId (the 0x... unique market id): APY/LLTV/size/utilization.
 
-    chain: ethereum、base 等。
+    chain: ethereum, base, etc.
     """
     chain_key, err = resolve_chain_or_error(chain)
     if err:
@@ -95,23 +95,23 @@ def morpho_get_market(market_id: str, chain: str = "ethereum") -> str:
     try:
         data = _gql(_MARKET_QUERY, {"marketId": market_id, "chainId": chain_id})
     except Exception as e:
-        return f"Morpho 市场查询失败:{e}"
+        return f"Morpho market query failed: {e}"
 
     m = data.get("marketById")
     if not m:
-        return f"未找到市场 {market_id}(链 {chain_key})。"
+        return f"Market {market_id} not found (chain {chain_key})."
     st = m.get("state") or {}
     loan = (m.get("loanAsset") or {}).get("symbol")
     coll = (m.get("collateralAsset") or {}).get("symbol")
-    lines = [f"Morpho 市场 {loan}/{coll}(链 {chain_key}) marketId={m.get('marketId')}"]
+    lines = [f"Morpho market {loan}/{coll} (chain {chain_key}) marketId={m.get('marketId')}"]
     if m.get("lltv"):
         lines.append(f"  LLTV={int(m['lltv']) / 1e18 * 100:.1f}%")
-    lines.append(f"  供应={_usd(st.get('supplyAssetsUsd'))} 借出={_usd(st.get('borrowAssetsUsd'))}")
+    lines.append(f"  supply={_usd(st.get('supplyAssetsUsd'))} borrow={_usd(st.get('borrowAssetsUsd'))}")
     if st.get("supplyApy") is not None:
         lines.append(
             f"  supplyAPY={st['supplyApy'] * 100:.2f}% "
             f"borrowAPY={(st.get('borrowApy') or 0) * 100:.2f}% "
-            f"利用率={(st.get('utilization') or 0) * 100:.1f}%"
+            f"utilization={(st.get('utilization') or 0) * 100:.1f}%"
         )
     return "\n".join(lines)
 
