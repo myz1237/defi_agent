@@ -9,13 +9,16 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+import os  # noqa: E402
+
 from langchain_core.messages import HumanMessage  # noqa: E402
-from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
 from langgraph.types import Command  # noqa: E402
 
+from app.agent.checkpointer import get_checkpointer  # noqa: E402
 from app.agent.graph import build_graph  # noqa: E402
 
-CONFIG = {"configurable": {"thread_id": "cli-session"}}
+# 固定 thread_id:同一 thread 跨进程共享会话历史(Postgres checkpointer 下持久)
+CONFIG = {"configurable": {"thread_id": os.getenv("CLI_THREAD_ID", "cli-session")}}
 
 
 def _print_updates(chunk: dict) -> None:
@@ -57,17 +60,22 @@ def _run(graph, payload) -> None:
 
 
 def main() -> None:
-    graph = build_graph().compile(checkpointer=InMemorySaver())
-    print("DeFi Agent CLI — 输入钱包/交易相关问题;Ctrl-D 退出")
-    while True:
-        try:
-            user = input("\n你> ").strip()
-        except EOFError:
-            print("\n再见")
-            break
-        if not user:
-            continue
-        _run(graph, {"messages": [HumanMessage(content=user)]})
+    builder = build_graph()
+    with get_checkpointer() as cp:
+        graph = builder.compile(checkpointer=cp)
+        print(
+            f"DeFi Agent CLI(checkpointer={type(cp).__name__}, thread={CONFIG['configurable']['thread_id']})"
+            " — 输入钱包/交易相关问题;Ctrl-D 退出"
+        )
+        while True:
+            try:
+                user = input("\n你> ").strip()
+            except EOFError:
+                print("\n再见")
+                break
+            if not user:
+                continue
+            _run(graph, {"messages": [HumanMessage(content=user)]})
 
 
 if __name__ == "__main__":
