@@ -6,6 +6,7 @@ SSE events: start / token / tool_call / tool_result / interrupt / done / error.
 
 import json
 import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -19,14 +20,22 @@ from sse_starlette.sse import EventSourceResponse
 from app.agent.checkpointer import get_async_checkpointer
 from app.agent.graph import build_graph
 from app.api.identity import Identity, get_identity
+from app.observability.audit import AuditLog
+from app.observability.logging import configure_logging, log_event
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging()
     builder = build_graph()
+    audit = AuditLog(os.getenv("LANGGRAPH_PG_DSN"))
+    await audit.open()
+    app.state.audit = audit
     async with get_async_checkpointer() as cp:
         app.state.graph = builder.compile(checkpointer=cp)
+        log_event("startup", checkpointer=type(cp).__name__, audit=bool(audit.pool))
         yield
+    await audit.close()
 
 
 app = FastAPI(title="DeFi Agent", lifespan=lifespan)
@@ -71,12 +80,18 @@ def _scoped_thread(identity: Identity, thread_id: str | None) -> str:
     return f"{identity.user_id}::{uuid.uuid4().hex[:16]}"
 
 
-async def _event_stream(graph, payload, config, thread_id: str):
+async def _event_stream(graph, payload, config, thread_id: str, identity: Identity, kind: str, message: str):
     """Map updates mode to SSE: tool_call / tool_result / token (assistant reply) / interrupt.
+
+    Also accumulates intent/tools/latency and writes one audit_log row + structured log per turn.
 
     Note: nodes use synchronous non-streaming invoke, so the assistant reply is emitted as a single token event;
     true token-by-token streaming would require switching nodes to streaming model calls (future enhancement).
     """
+    started = time.perf_counter()
+    intent: str | None = None
+    in_scope: bool | None = None
+    tools: list[str] = []
     yield _sse("start", {"thread_id": thread_id})
     try:
         async for update_dict in graph.astream(payload, config, stream_mode="updates"):
@@ -88,10 +103,14 @@ async def _event_stream(graph, payload, config, thread_id: str):
                     continue
                 if not isinstance(update, dict):
                     continue
+                if node == "guard":
+                    intent = update.get("intent", intent)
+                    in_scope = update.get("in_scope", in_scope)
                 for m in update.get("messages", []) or []:
                     mtype = getattr(m, "type", "")
                     if mtype == "ai" and getattr(m, "tool_calls", None):
                         for tc in m.tool_calls:
+                            tools.append(tc["name"])
                             yield _sse("tool_call", {"name": tc["name"], "args": tc.get("args", {})})
                     elif mtype == "ai":
                         text = _text_of(m.content)
@@ -103,6 +122,29 @@ async def _event_stream(graph, payload, config, thread_id: str):
         yield _sse("done", {})
     except Exception as e:  # noqa: BLE001
         yield _sse("error", {"error": str(e)})
+    finally:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        fields = {
+            "user_id": identity.user_id,
+            "identity_kind": identity.kind,
+            "kind": kind,
+            "thread_id": thread_id,
+            "intent": intent,
+            "in_scope": in_scope,
+            "tools": tools,
+            "latency_ms": latency_ms,
+        }
+        log_event("chat", **fields)
+        await app.state.audit.record(
+            user_id=identity.user_id,
+            kind=kind,
+            thread_id=thread_id,
+            intent=intent,
+            in_scope=in_scope,
+            tools=tools,
+            latency_ms=latency_ms,
+            message=message,
+        )
 
 
 @app.get("/healthz")
@@ -120,14 +162,18 @@ async def chat(req: ChatRequest, identity: Identity = Depends(get_identity)):
     thread_id = _scoped_thread(identity, req.thread_id)
     config = {"configurable": {"thread_id": thread_id}}
     payload = {"messages": [HumanMessage(content=req.message)]}
-    return EventSourceResponse(_event_stream(app.state.graph, payload, config, thread_id))
+    return EventSourceResponse(
+        _event_stream(app.state.graph, payload, config, thread_id, identity, "chat", req.message)
+    )
 
 
 @app.post("/v1/chat/resume")
 async def resume(req: ResumeRequest, identity: Identity = Depends(get_identity)):
     thread_id = _scoped_thread(identity, req.thread_id)
     config = {"configurable": {"thread_id": thread_id}}
-    return EventSourceResponse(_event_stream(app.state.graph, Command(resume=req.resume), config, thread_id))
+    return EventSourceResponse(
+        _event_stream(app.state.graph, Command(resume=req.resume), config, thread_id, identity, "resume", req.resume)
+    )
 
 
 @app.get("/v1/threads/{thread_id}/history")
