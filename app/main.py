@@ -80,13 +80,17 @@ def _scoped_thread(identity: Identity, thread_id: str | None) -> str:
     return f"{identity.user_id}::{uuid.uuid4().hex[:16]}"
 
 
+_AGENT_NODES = {"wallet_agent", "tx_agent"}
+
+
 async def _event_stream(graph, payload, config, thread_id: str, identity: Identity, kind: str, message: str):
-    """Map updates mode to SSE: tool_call / tool_result / token (assistant reply) / interrupt.
+    """Stream SSE events from the graph and write one audit_log row + structured log per turn.
 
-    Also accumulates intent/tools/latency and writes one audit_log row + structured log per turn.
-
-    Note: nodes use synchronous non-streaming invoke, so the assistant reply is emitted as a single token event;
-    true token-by-token streaming would require switching nodes to streaming model calls (future enhancement).
+    Uses two stream modes together:
+    - "messages": token-by-token deltas, filtered to the agent nodes (wallet_agent/tx_agent) so only
+      the assistant's natural-language reply streams (tool-call chunks and the guard call are skipped).
+    - "updates": tool_call / tool_result / interrupt, plus the refuse text (refuse is a non-model node,
+      so it does not appear in the messages stream).
     """
     started = time.perf_counter()
     intent: str | None = None
@@ -94,8 +98,17 @@ async def _event_stream(graph, payload, config, thread_id: str, identity: Identi
     tools: list[str] = []
     yield _sse("start", {"thread_id": thread_id})
     try:
-        async for update_dict in graph.astream(payload, config, stream_mode="updates"):
-            for node, update in update_dict.items():
+        async for mode, data in graph.astream(payload, config, stream_mode=["updates", "messages"]):
+            if mode == "messages":
+                chunk, meta = data
+                is_agent = meta.get("langgraph_node") in _AGENT_NODES
+                if is_agent and getattr(chunk, "type", "") in ("ai", "AIMessageChunk"):
+                    text = _text_of(chunk.content)
+                    if text:
+                        yield _sse("token", {"text": text})
+                continue
+            # mode == "updates"
+            for node, update in data.items():
                 if node == "__interrupt__":
                     intr = update[0]
                     q = intr.value.get("question") if isinstance(intr.value, dict) else str(intr.value)
@@ -112,7 +125,8 @@ async def _event_stream(graph, payload, config, thread_id: str, identity: Identi
                         for tc in m.tool_calls:
                             tools.append(tc["name"])
                             yield _sse("tool_call", {"name": tc["name"], "args": tc.get("args", {})})
-                    elif mtype == "ai":
+                    elif mtype == "ai" and node not in _AGENT_NODES:
+                        # Non-model nodes (e.g. refuse) are not in the messages stream; emit their text here.
                         text = _text_of(m.content)
                         if text:
                             yield _sse("token", {"text": text})
