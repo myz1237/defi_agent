@@ -4,6 +4,8 @@
 // Anonymous session (localStorage); SIWE wallet connect is a placeholder for now.
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { streamChat, streamResume, type SSEEvent } from "@/lib/api";
 
 type ToolEvent = { kind: "call" | "result"; name: string; detail: string };
@@ -128,7 +130,14 @@ export default function DefiChat() {
                 ))}
               </div>
             )}
-            {turn.text && <div className="bubble">{turn.text}</div>}
+            {turn.text &&
+              (turn.role === "assistant" ? (
+                <div className="bubble markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.text}</ReactMarkdown>
+                </div>
+              ) : (
+                <div className="bubble">{turn.text}</div>
+              ))}
           </div>
         ))}
         {interrupt && <div className="interrupt">⚠ {interrupt}</div>}
