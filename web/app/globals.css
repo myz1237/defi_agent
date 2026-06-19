@@ -56,12 +56,16 @@ body {
 
 .wallet-btn {
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;
-  cursor: not-allowed;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wallet-btn:hover {
+  border-color: var(--accent);
 }
 
 .muted {

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from fastapi import Header, Request
 
+from app.api.auth import decode_token
 from app.storage.repo import is_valid_api_key
 
 
@@ -40,9 +41,10 @@ async def get_identity(
         return Identity(kind="widget", user_id=f"widget:{x_api_key[:8]}", session_id=x_api_key[:8])
 
     if authorization and authorization.lower().startswith("bearer "):
-        # TODO(M8): validate the SIWE-issued JWT; for now take the token tail as a placeholder user_id
-        token = authorization.split(" ", 1)[1]
-        return Identity(kind="siwe", user_id=f"siwe:{token[-12:]}", session_id=token[-12:])
+        address = decode_token(authorization.split(" ", 1)[1])
+        if address:
+            return Identity(kind="siwe", user_id=f"siwe:{address.lower()}", session_id=address.lower())
+        # Invalid/expired token: fall through to an anonymous session.
 
     session_id = x_session_id or f"anon-{uuid.uuid4().hex[:16]}"
     return Identity(kind="anon", user_id=f"anon:{session_id}", session_id=session_id)

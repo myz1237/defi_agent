@@ -19,6 +19,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agent.checkpointer import get_async_checkpointer
 from app.agent.graph import build_graph
+from app.api.auth import router as auth_router
 from app.api.identity import Identity, get_identity
 from app.observability.audit import AuditLog
 from app.observability.logging import configure_logging, log_event
@@ -46,6 +47,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 
 
 class ChatRequest(BaseModel):

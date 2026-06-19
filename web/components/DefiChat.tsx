@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { streamChat, streamResume, type SSEEvent } from "@/lib/api";
+import { connectWallet, type WalletSession } from "@/lib/wallet";
 
 type ToolEvent = { kind: "call" | "result"; name: string; detail: string };
 type Turn = {
@@ -30,13 +31,41 @@ export default function DefiChat() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [interrupt, setInterrupt] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletSession | null>(null);
   const sessionRef = useRef<string>("");
   const threadRef = useRef<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     sessionRef.current = getSessionId();
+    const saved = localStorage.getItem("defi_wallet");
+    if (saved) {
+      const w = JSON.parse(saved) as WalletSession;
+      setWallet(w);
+      tokenRef.current = w.token;
+    }
   }, []);
+
+  async function onConnect() {
+    if (wallet) {
+      // Disconnect
+      setWallet(null);
+      tokenRef.current = null;
+      threadRef.current = null; // identity changed -> start a fresh thread
+      localStorage.removeItem("defi_wallet");
+      return;
+    }
+    try {
+      const w = await connectWallet();
+      setWallet(w);
+      tokenRef.current = w.token;
+      threadRef.current = null; // identity changed -> start a fresh thread
+      localStorage.setItem("defi_wallet", JSON.stringify(w));
+    } catch (e: any) {
+      alert(e?.message ?? "Wallet connect failed");
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -86,7 +115,7 @@ export default function DefiChat() {
     setInput("");
     setTurns((t) => [...t, { role: "user", text: message, tools: [] }]);
     setBusy(true);
-    await consume(streamChat(sessionRef.current, message, threadRef.current));
+    await consume(streamChat(sessionRef.current, message, threadRef.current, tokenRef.current));
     setBusy(false);
   }
 
@@ -97,7 +126,7 @@ export default function DefiChat() {
     setInterrupt(null);
     setTurns((t) => [...t, { role: "user", text: answer, tools: [] }]);
     setBusy(true);
-    await consume(streamResume(sessionRef.current, threadRef.current, answer));
+    await consume(streamResume(sessionRef.current, threadRef.current, answer, tokenRef.current));
     setBusy(false);
   }
 
@@ -106,8 +135,8 @@ export default function DefiChat() {
       <header className="chat-header">
         <strong>DeFi Agent</strong>
         <span className="muted">read-only · ETH/BNB/ARB/BASE/OPT · LI.FI &amp; Morpho</span>
-        <button className="wallet-btn" disabled title="Coming soon">
-          Connect Wallet
+        <button className="wallet-btn" onClick={onConnect} title="Sign-In with Ethereum (gas-free, read-only)">
+          {wallet ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)} · Disconnect` : "Connect Wallet"}
         </button>
       </header>
 

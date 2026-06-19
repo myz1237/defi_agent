@@ -36,20 +36,23 @@ async function* parseSSE(resp: Response): AsyncGenerator<SSEEvent> {
   }
 }
 
-async function* stream(path: string, sessionId: string, body: unknown): AsyncGenerator<SSEEvent> {
-  const resp = await fetch(API_BASE + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
-    body: JSON.stringify(body),
-  });
+async function* stream(
+  path: string,
+  sessionId: string,
+  body: unknown,
+  token?: string | null,
+): AsyncGenerator<SSEEvent> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Session-Id": sessionId };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const resp = await fetch(API_BASE + path, { method: "POST", headers, body: JSON.stringify(body) });
   if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
   yield* parseSSE(resp);
 }
 
-export function streamChat(sessionId: string, message: string, threadId: string | null) {
-  return stream("/v1/chat", sessionId, { message, thread_id: threadId });
+export function streamChat(sessionId: string, message: string, threadId: string | null, token?: string | null) {
+  return stream("/v1/chat", sessionId, { message, thread_id: threadId }, token);
 }
 
-export function streamResume(sessionId: string, threadId: string, resume: string) {
-  return stream("/v1/chat/resume", sessionId, { thread_id: threadId, resume });
+export function streamResume(sessionId: string, threadId: string, resume: string, token?: string | null) {
+  return stream("/v1/chat/resume", sessionId, { thread_id: threadId, resume }, token);
 }
