@@ -14,6 +14,8 @@ from dataclasses import dataclass
 
 from fastapi import Header, Request
 
+from app.storage.repo import is_valid_api_key
+
 
 @dataclass(frozen=True)
 class Identity:
@@ -33,7 +35,8 @@ async def get_identity(
     x_session_id: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
 ) -> Identity:
-    if x_api_key and x_api_key in _widget_keys():
+    # Widget key: env allowlist first (no DB round-trip), then the api_keys table.
+    if x_api_key and (x_api_key in _widget_keys() or await is_valid_api_key(x_api_key)):
         return Identity(kind="widget", user_id=f"widget:{x_api_key[:8]}", session_id=x_api_key[:8])
 
     if authorization and authorization.lower().startswith("bearer "):

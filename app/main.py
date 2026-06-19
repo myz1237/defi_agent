@@ -22,6 +22,7 @@ from app.agent.graph import build_graph
 from app.api.identity import Identity, get_identity
 from app.observability.audit import AuditLog
 from app.observability.logging import configure_logging, log_event
+from app.storage.repo import touch_thread
 
 
 @asynccontextmanager
@@ -174,6 +175,7 @@ async def readyz():
 @app.post("/v1/chat")
 async def chat(req: ChatRequest, identity: Identity = Depends(get_identity)):
     thread_id = _scoped_thread(identity, req.thread_id)
+    await touch_thread(thread_id, identity.user_id)
     config = {"configurable": {"thread_id": thread_id}}
     payload = {"messages": [HumanMessage(content=req.message)]}
     return EventSourceResponse(
@@ -184,6 +186,7 @@ async def chat(req: ChatRequest, identity: Identity = Depends(get_identity)):
 @app.post("/v1/chat/resume")
 async def resume(req: ResumeRequest, identity: Identity = Depends(get_identity)):
     thread_id = _scoped_thread(identity, req.thread_id)
+    await touch_thread(thread_id, identity.user_id)
     config = {"configurable": {"thread_id": thread_id}}
     return EventSourceResponse(
         _event_stream(app.state.graph, Command(resume=req.resume), config, thread_id, identity, "resume", req.resume)
