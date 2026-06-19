@@ -22,6 +22,8 @@ dependencies = [
 dev = [
     "langgraph-cli[inmem]>=0.4.30",
     "langsmith[claude-agent-sdk]>=0.8.16",
+    "pytest>=9.1.0",
+    "respx>=0.23.1",
     "ruff>=0.15.17",
 ]
 
@@ -31,16 +33,20 @@ line-length = 120
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle 错误
-    "W",   # pycodestyle 警告
-    "F",   # pyflakes:未用变量/import、未定义名等
-    "I",   # isort:import 排序(配合保存时自动整理 import)
-    "UP",  # pyupgrade:用更新的 Python 语法
-    "B",   # flake8-bugbear:常见易错写法
-    "SIM", # flake8-simplify:可简化的写法
-    "C4",  # flake8-comprehensions:更好的推导式
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes: unused vars/imports, undefined names, etc.
+    "I",   # isort: import ordering
+    "UP",  # pyupgrade: modern Python syntax
+    "B",   # flake8-bugbear: common pitfalls
+    "SIM", # flake8-simplify: simplifiable code
+    "C4",  # flake8-comprehensions: better comprehensions
 ]
 ignore = [
-    # "E501",  # line-too-long:换行交给 formatter 处理,不再报警
-    "B008",  # FastAPI 依赖注入惯用法:Depends() 作默认值
+    # "E501",  # line-too-long: left to the formatter
+    "B008",  # FastAPI idiom: Depends() as a default value
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
