@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.137.2",
     "httpx>=0.28.1",
     "langchain>=1.3.9",
     "langchain-anthropic>=1.4.6",
@@ -12,6 +13,8 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.1.0",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.1",
+    "sse-starlette>=3.3.4",
+    "uvicorn[standard]>=0.49.0",
     "web3>=7.16.0",
 ]
 
@@ -39,4 +42,5 @@ select = [
 ]
 ignore = [
     # "E501",  # line-too-long:换行交给 formatter 处理,不再报警
+    "B008",  # FastAPI 依赖注入惯用法:Depends() 作默认值
 ]
