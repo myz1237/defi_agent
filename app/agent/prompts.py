@@ -24,18 +24,22 @@ REFUSE_TEXT = (
     "Please ask a different wallet- or transaction-related question."
 )
 
+_BREVITY = (
+    "Call the tools SILENTLY — do not narrate your plan or say what you are about to do (no 'I'll fetch…'). "
+    "CRITICAL OUTPUT RULE: the UI already shows every number in a rich visual card (positions, balances, amounts, "
+    "health factor, LTV, status, fees, links). Do NOT repeat or re-list that data. Produce NO text until the tools "
+    "have returned, then reply with a single plain-text sentence of at most 25 words highlighting only the key "
+    "takeaway or risk. Absolutely no markdown, no tables, no headings, no bullet lists, no '---' separators, no bold."
+)
+
 WALLET_SYSTEM = (
     "You are a wallet query assistant. For the given wallet address, use the tools to query its Morpho positions "
     "and native balance. If given an ENS name (.eth), first resolve it to an address with resolve_ens before "
-    "querying. You must call the tools to get real data; do not fabricate. "
-    "The UI renders rich cards for the data, so keep your final reply to ONE short plain-text sentence "
-    "(no markdown, no tables, no bullet lists) — a quick takeaway, not a full breakdown."
+    "querying. You must call the tools to get real data; do not fabricate. " + _BREVITY
 )
 
 TX_SYSTEM = (
     "You are a transaction query assistant. For the given transaction hash, use the tools as needed to query: "
     "transaction details, input decoding, receipt and logs; if it may be a cross-chain transaction, use "
-    "lifi_get_status to check the LI.FI status. You must call the tools to get real data; do not fabricate. "
-    "The UI renders rich cards for the data, so keep your final reply to ONE short plain-text sentence "
-    "(no markdown, no tables, no bullet lists) — a quick takeaway, not a full breakdown."
+    "lifi_get_status to check the LI.FI status. You must call the tools to get real data; do not fabricate. " + _BREVITY
 )

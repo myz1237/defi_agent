@@ -180,7 +180,11 @@ export const DeFiAgentChat: React.FC<DeFiAgentChatProps> = ({
         )}
 
         {messages.map((m) => (
-          <ChatMessageView key={m.id} message={m} />
+          // flexShrink:0 so tall cards keep their natural height (the column scrolls instead of crushing them);
+          // the flex-column wrapper preserves alignSelf for user bubbles.
+          <div key={m.id} style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            <ChatMessageView message={m} />
+          </div>
         ))}
 
         {thinking && (
