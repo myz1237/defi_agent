@@ -1,23 +1,17 @@
 "use client";
 
-// Shared chat component: consumes the backend SSE API.
-// Anonymous session (localStorage); SIWE wallet connect is a placeholder for now.
+// Controller/host: owns the message thread + wallet, maps backend SSE -> ChatMessage[],
+// and renders the presentational <DeFiAgentChat /> (card-based UI).
 
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { DeFiAgentChat, mapLifiStatus } from "@/chat-ui";
+import type { ChatMessage, MorphoView } from "@/chat-ui/types";
 import { streamChat, streamResume, type SSEEvent } from "@/lib/api";
 import { connectWallet, type WalletSession } from "@/lib/wallet";
 
-type ToolEvent = { kind: "call" | "result"; name: string; detail: string };
-type Turn = {
-  role: "user" | "assistant";
-  text: string;
-  tools: ToolEvent[];
-};
+const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
 function getSessionId(): string {
-  if (typeof window === "undefined") return "anon";
   let sid = localStorage.getItem("defi_session_id");
   if (!sid) {
     sid = "web-" + Math.random().toString(36).slice(2, 14);
@@ -26,16 +20,29 @@ function getSessionId(): string {
   return sid;
 }
 
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+const SUGGESTIONS = [
+  {
+    label: "Is tx 0x7459… cross-chain?",
+    query: "Is tx 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd a completed cross-chain transfer?",
+  },
+  {
+    label: "Morpho positions (0x7b52…)",
+    query: "Show Morpho positions for 0x7b524b0308a776a7d4E65A2Db73bB37881818748",
+  },
+  { label: "My Morpho positions", query: "Show my Morpho positions" },
+];
+
 export default function DefiChat() {
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [interrupt, setInterrupt] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [thinking, setThinking] = useState(false);
+  const [awaitingResume, setAwaitingResume] = useState(false);
   const [wallet, setWallet] = useState<WalletSession | null>(null);
+
   const sessionRef = useRef<string>("");
   const threadRef = useRef<string | null>(null);
   const tokenRef = useRef<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     sessionRef.current = getSessionId();
@@ -47,12 +54,62 @@ export default function DefiChat() {
     }
   }, []);
 
-  async function onConnect() {
+  const append = (m: ChatMessage) => setMessages((prev) => [...prev, m]);
+
+  async function consume(gen: AsyncGenerator<SSEEvent>) {
+    let agentTextId: string | null = null; // local: avoids strict-mode ref pitfalls
+    try {
+      for await (const ev of gen) {
+        if (ev.event === "start") {
+          if (ev.data?.thread_id) threadRef.current = ev.data.thread_id;
+        } else if (ev.event === "token") {
+          const delta: string = ev.data?.text ?? "";
+          if (!delta) continue;
+          if (!agentTextId) {
+            const id = (agentTextId = uid());
+            append({ id, role: "agent", text: delta });
+          } else {
+            const id = agentTextId;
+            setMessages((prev) =>
+              prev.map((x) => (x.id === id && "text" in x ? { ...x, text: x.text + delta } : x)),
+            );
+          }
+        } else if (ev.event === "card") {
+          if (ev.data?.kind === "lifi") {
+            append({ id: uid(), role: "agent", card: { kind: "lifi", data: mapLifiStatus(ev.data.raw) } });
+          } else if (ev.data?.kind === "morpho") {
+            append({ id: uid(), role: "agent", card: { kind: "morpho", data: ev.data.data as MorphoView } });
+          }
+        } else if (ev.event === "interrupt") {
+          append({ id: uid(), role: "agent", text: ev.data?.question ?? "More input needed." });
+          setAwaitingResume(true);
+        } else if (ev.event === "error") {
+          append({ id: uid(), role: "agent", text: `[error] ${ev.data?.error ?? ""}` });
+        }
+      }
+    } catch (e: any) {
+      append({ id: uid(), role: "agent", text: `[network error] ${e?.message ?? e}` });
+    }
+  }
+
+  async function onSend(text: string) {
+    if (thinking) return;
+    append({ id: uid(), role: "user", text });
+    setThinking(true);
+    const resuming = awaitingResume;
+    if (resuming) setAwaitingResume(false);
+    const gen = resuming
+      ? streamResume(sessionRef.current, threadRef.current!, text, tokenRef.current)
+      : streamChat(sessionRef.current, text, threadRef.current, tokenRef.current);
+    await consume(gen);
+    setThinking(false);
+  }
+
+  async function onConnectWallet() {
     if (wallet) {
-      // Disconnect
       setWallet(null);
       tokenRef.current = null;
-      threadRef.current = null; // identity changed -> start a fresh thread
+      threadRef.current = null; // identity changed -> fresh thread
       localStorage.removeItem("defi_wallet");
       return;
     }
@@ -60,131 +117,22 @@ export default function DefiChat() {
       const w = await connectWallet();
       setWallet(w);
       tokenRef.current = w.token;
-      threadRef.current = null; // identity changed -> start a fresh thread
+      threadRef.current = null;
       localStorage.setItem("defi_wallet", JSON.stringify(w));
     } catch (e: any) {
-      alert(e?.message ?? "Wallet connect failed");
+      append({ id: uid(), role: "agent", text: `[wallet] ${e?.message ?? "connect failed"}` });
     }
-  }
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, interrupt]);
-
-  // Drive a stream of SSE events into the latest assistant turn.
-  async function consume(gen: AsyncGenerator<SSEEvent>) {
-    // Start a fresh assistant turn that we mutate as events arrive.
-    setTurns((t) => [...t, { role: "assistant", text: "", tools: [] }]);
-    const patch = (fn: (turn: Turn) => Turn) =>
-      setTurns((t) => {
-        const next = [...t];
-        next[next.length - 1] = fn(next[next.length - 1]);
-        return next;
-      });
-
-    try {
-      for await (const ev of gen) {
-        if (ev.event === "start") {
-          if (ev.data?.thread_id) threadRef.current = ev.data.thread_id;
-        } else if (ev.event === "token") {
-          patch((turn) => ({ ...turn, text: turn.text + (ev.data?.text ?? "") }));
-        } else if (ev.event === "tool_call") {
-          patch((turn) => ({
-            ...turn,
-            tools: [...turn.tools, { kind: "call", name: ev.data?.name, detail: JSON.stringify(ev.data?.args ?? {}) }],
-          }));
-        } else if (ev.event === "tool_result") {
-          patch((turn) => ({
-            ...turn,
-            tools: [...turn.tools, { kind: "result", name: ev.data?.name, detail: ev.data?.content ?? "" }],
-          }));
-        } else if (ev.event === "interrupt") {
-          setInterrupt(ev.data?.question ?? "More input needed");
-        } else if (ev.event === "error") {
-          patch((turn) => ({ ...turn, text: turn.text + `\n[error] ${ev.data?.error ?? ""}` }));
-        }
-      }
-    } catch (e: any) {
-      patch((turn) => ({ ...turn, text: turn.text + `\n[network error] ${e?.message ?? e}` }));
-    }
-  }
-
-  async function send() {
-    const message = input.trim();
-    if (!message || busy) return;
-    setInput("");
-    setTurns((t) => [...t, { role: "user", text: message, tools: [] }]);
-    setBusy(true);
-    await consume(streamChat(sessionRef.current, message, threadRef.current, tokenRef.current));
-    setBusy(false);
-  }
-
-  async function answerInterrupt() {
-    const answer = input.trim();
-    if (!answer || !threadRef.current) return;
-    setInput("");
-    setInterrupt(null);
-    setTurns((t) => [...t, { role: "user", text: answer, tools: [] }]);
-    setBusy(true);
-    await consume(streamResume(sessionRef.current, threadRef.current, answer, tokenRef.current));
-    setBusy(false);
   }
 
   return (
-    <div className="chat">
-      <header className="chat-header">
-        <strong>DeFi Agent</strong>
-        <span className="muted">read-only · ETH/BNB/ARB/BASE/OPT · LI.FI &amp; Morpho</span>
-        <button className="wallet-btn" onClick={onConnect} title="Sign-In with Ethereum (gas-free, read-only)">
-          {wallet ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)} · Disconnect` : "Connect Wallet"}
-        </button>
-      </header>
-
-      <div className="messages">
-        {turns.length === 0 && (
-          <div className="empty muted">
-            Ask about a transaction hash or a wallet address. e.g. &quot;Is tx 0x7459… a cross-chain transfer?&quot;
-          </div>
-        )}
-        {turns.map((turn, i) => (
-          <div key={i} className={`turn ${turn.role}`}>
-            {turn.tools.length > 0 && (
-              <div className="tools">
-                {turn.tools.map((tl, j) => (
-                  <div key={j} className={`tool ${tl.kind}`}>
-                    {tl.kind === "call" ? "→ " : "✓ "}
-                    <code>{tl.name}</code>
-                    {tl.kind === "call" && <span className="muted"> {tl.detail}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-            {turn.text &&
-              (turn.role === "assistant" ? (
-                <div className="bubble markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.text}</ReactMarkdown>
-                </div>
-              ) : (
-                <div className="bubble">{turn.text}</div>
-              ))}
-          </div>
-        ))}
-        {interrupt && <div className="interrupt">⚠ {interrupt}</div>}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="composer">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (interrupt ? answerInterrupt() : send())}
-          placeholder={interrupt ? "Type your answer…" : "Ask about a tx hash or wallet…"}
-          disabled={busy}
-        />
-        <button onClick={() => (interrupt ? answerInterrupt() : send())} disabled={busy || !input.trim()}>
-          {busy ? "…" : interrupt ? "Reply" : "Send"}
-        </button>
-      </div>
-    </div>
+    <DeFiAgentChat
+      messages={messages}
+      thinking={thinking}
+      onSend={onSend}
+      onConnectWallet={onConnectWallet}
+      walletLabel={wallet ? `${short(wallet.address)} · DISCONNECT` : "CONNECT WALLET"}
+      placeholder={awaitingResume ? "type your answer…" : "ask about a tx hash or wallet…"}
+      suggestions={SUGGESTIONS}
+    />
   );
 }
