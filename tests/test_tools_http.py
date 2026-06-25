@@ -94,3 +94,69 @@ def test_morpho_market():
     assert "RLUSD/cbBTC" in out
     assert "LLTV=86.0%" in out
     assert "borrowAPY=3.21%" in out
+
+
+def _tool_call(name: str, args: dict) -> dict:
+    return {"name": name, "args": args, "id": "1", "type": "tool_call"}
+
+
+@respx.mock
+def test_lifi_artifact():
+    respx.get("https://li.quest/v1/status").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "status": "DONE",
+                "sending": {"chainId": 1, "amount": "100", "token": {"symbol": "USDT", "decimals": 6}},
+                "receiving": {"chainId": 56, "amount": "200", "token": {"symbol": "BNB", "decimals": 18}},
+            },
+        )
+    )
+    msg = lifi_get_status.invoke(_tool_call("lifi_get_status", {"tx_hash": "0xabc"}))
+    assert msg.artifact["kind"] == "lifi"
+    assert msg.artifact["raw"]["status"] == "DONE"
+
+
+@respx.mock
+def test_morpho_artifact():
+    respx.post("https://blue-api.morpho.org/graphql").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": {
+                    "userByAddress": {
+                        "address": "0x7b524b0308a776a7d4E65A2Db73bB37881818748",
+                        "marketPositions": [
+                            {
+                                "healthFactor": "1.87",
+                                "market": {
+                                    "marketId": "0xm",
+                                    "lltv": "860000000000000000",
+                                    "loanAsset": {"symbol": "RLUSD", "decimals": 18},
+                                    "collateralAsset": {"symbol": "cbBTC", "decimals": 8},
+                                },
+                                "state": {
+                                    "collateral": "42500000000",
+                                    "collateralUsd": 2000000.0,
+                                    "borrowAssets": "1000000000000000000000",
+                                    "borrowAssetsUsd": 920000.0,
+                                    "supplyAssetsUsd": 0,
+                                },
+                            }
+                        ],
+                        "vaultPositions": [],
+                    }
+                }
+            },
+        )
+    )
+    msg = morpho_get_positions.invoke(
+        _tool_call("morpho_get_positions", {"address": "0x7b524b0308a776a7d4E65A2Db73bB37881818748"})
+    )
+    market = msg.artifact["data"]["borrowMarkets"][0]
+    assert msg.artifact["kind"] == "morpho"
+    assert market["loanSymbol"] == "RLUSD"
+    assert market["healthFactor"] == "1.87"
+    assert market["lltvPct"] == 86.0
+    assert market["ltvPct"] == 46.0
+    assert "cbBTC" in market["collateralAmount"]

@@ -8,8 +8,10 @@ from app.agent.tools.registry import register
 from app.config import settings
 
 
-@tool
-def lifi_get_status(tx_hash: str, from_chain: str | None = None, to_chain: str | None = None) -> str:
+@tool(response_format="content_and_artifact")
+def lifi_get_status(
+    tx_hash: str, from_chain: str | None = None, to_chain: str | None = None
+) -> tuple[str, dict | None]:
     """Query LI.FI cross-chain transfer status (PENDING/DONE/FAILED/NOT_FOUND/INVALID).
 
     tx_hash: the transaction hash on the source chain.
@@ -24,7 +26,7 @@ def lifi_get_status(tx_hash: str, from_chain: str | None = None, to_chain: str |
         resp = httpx.get(f"{settings.lifi_base_url}/v1/status", params=params, timeout=settings.http_timeout)
         data = resp.json()
     except Exception as e:
-        return f"LI.FI status query failed: {e}"
+        return f"LI.FI status query failed: {e}", None
 
     lines = [f"LI.FI status={data.get('status')} substatus={data.get('substatus')}"]
     msg = data.get("substatusMessage") or data.get("message")
@@ -44,7 +46,11 @@ def lifi_get_status(tx_hash: str, from_chain: str | None = None, to_chain: str |
     link = data.get("lifiExplorerLink") or data.get("transactionLink")
     if link:
         lines.append(f"explorer: {link}")
-    return "\n".join(lines)
+
+    # Artifact: full raw status JSON for the frontend LifiStatusCard (mapLifiStatus). Only attach on a real
+    # response (sending/receiving present), so NOT_FOUND/errors stay text-only.
+    artifact = {"kind": "lifi", "raw": data} if data.get("sending") and data.get("receiving") else None
+    return "\n".join(lines), artifact
 
 
 register(make_spec(lifi_get_status, "lifi", ALL_CHAINS))

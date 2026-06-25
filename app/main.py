@@ -134,6 +134,9 @@ async def _event_stream(graph, payload, config, thread_id: str, identity: Identi
                         if text:
                             yield _sse("token", {"text": text})
                     elif mtype == "tool":
+                        art = getattr(m, "artifact", None)
+                        if isinstance(art, dict) and art.get("kind"):
+                            yield _sse("card", art)
                         content = m.content if isinstance(m.content, str) else str(m.content)
                         yield _sse("tool_result", {"name": getattr(m, "name", ""), "content": content[:1000]})
         yield _sse("done", {})

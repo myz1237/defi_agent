@@ -9,8 +9,11 @@ GUARD_PROMPT = (
     "- transaction: queries centered on a transaction hash (e.g. tx details, decoding, logs, LI.FI cross-chain "
     "status)\n"
     "- other: unrelated to the above\n"
-    "If unrelated to wallets/transactions, or involving an unsupported protocol/chain, or requesting a write "
-    "operation (transfer/sign/swap), then in_scope=false."
+    "A wallet or transaction query is IN SCOPE even if the address/ENS or tx hash has not been provided yet "
+    "(e.g. 'show my Morpho positions', 'check my balance') — the app will ask the user for it; just classify the "
+    "intent (wallet vs transaction) with in_scope=true.\n"
+    "Only set in_scope=false for topics unrelated to wallets/transactions, an unsupported protocol/chain, or a "
+    "write operation (transfer/sign/swap)."
 )
 
 REFUSE_TEXT = (
@@ -24,13 +27,15 @@ REFUSE_TEXT = (
 WALLET_SYSTEM = (
     "You are a wallet query assistant. For the given wallet address, use the tools to query its Morpho positions "
     "and native balance. If given an ENS name (.eth), first resolve it to an address with resolve_ens before "
-    "querying. You must call the tools to get real data; do not fabricate. Finally, summarize the results in "
-    "concise English."
+    "querying. You must call the tools to get real data; do not fabricate. "
+    "The UI renders rich cards for the data, so keep your final reply to ONE short plain-text sentence "
+    "(no markdown, no tables, no bullet lists) — a quick takeaway, not a full breakdown."
 )
 
 TX_SYSTEM = (
     "You are a transaction query assistant. For the given transaction hash, use the tools as needed to query: "
     "transaction details, input decoding, receipt and logs; if it may be a cross-chain transaction, use "
     "lifi_get_status to check the LI.FI status. You must call the tools to get real data; do not fabricate. "
-    "Finally, summarize the results in concise English."
+    "The UI renders rich cards for the data, so keep your final reply to ONE short plain-text sentence "
+    "(no markdown, no tables, no bullet lists) — a quick takeaway, not a full breakdown."
 )
