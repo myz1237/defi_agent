@@ -23,6 +23,7 @@ class Identity:
     kind: str  # widget | siwe | anon
     user_id: str
     session_id: str
+    address: str | None = None  # connected wallet address (siwe only) — used to resolve "my ..." queries
 
 
 def _widget_keys() -> set[str]:
@@ -43,7 +44,9 @@ async def get_identity(
     if authorization and authorization.lower().startswith("bearer "):
         address = decode_token(authorization.split(" ", 1)[1])
         if address:
-            return Identity(kind="siwe", user_id=f"siwe:{address.lower()}", session_id=address.lower())
+            return Identity(
+                kind="siwe", user_id=f"siwe:{address.lower()}", session_id=address.lower(), address=address
+            )
         # Invalid/expired token: fall through to an anonymous session.
 
     session_id = x_session_id or f"anon-{uuid.uuid4().hex[:16]}"

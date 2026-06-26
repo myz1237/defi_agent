@@ -182,7 +182,7 @@ async def chat(req: ChatRequest, identity: Identity = Depends(get_identity)):
     thread_id = _scoped_thread(identity, req.thread_id)
     await touch_thread(thread_id, identity.user_id)
     config = {"configurable": {"thread_id": thread_id}}
-    payload = {"messages": [HumanMessage(content=req.message)]}
+    payload = {"messages": [HumanMessage(content=req.message)], "connected_address": identity.address}
     return EventSourceResponse(
         _event_stream(app.state.graph, payload, config, thread_id, identity, "chat", req.message)
     )

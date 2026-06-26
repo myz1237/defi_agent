@@ -74,7 +74,10 @@ def refuse(state: AgentState) -> dict:
 def extract_wallet(state: AgentState) -> dict:
     text = _last_human_text(state["messages"])
     m = ADDRESS_RE.search(text) or ENS_RE.search(text)
-    return {"address": m.group(0) if m else None}
+    if m:
+        return {"address": m.group(0)}
+    # No address in the message — fall back to the connected wallet ("my positions", "check my balance").
+    return {"address": state.get("connected_address")}
 
 
 def has_address(state: AgentState) -> str:
