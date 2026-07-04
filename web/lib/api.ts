@@ -1,4 +1,4 @@
-// 消费后端 SSE:fetch + ReadableStream(EventSource 不便带 POST/头)。
+// Consume the backend SSE stream: fetch + ReadableStream (EventSource can't easily send POST/headers).
 
 export type SSEEvent = { event: string; data: any };
 
@@ -22,14 +22,14 @@ async function* parseSSE(resp: Response): AsyncGenerator<SSEEvent> {
       for (const line of raw.split("\n")) {
         if (line.startsWith("event:")) event = line.slice(6).trim();
         else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
-        // 以 ":" 开头的是注释/心跳(sse-starlette ping),忽略
+        // Lines starting with ":" are comments/heartbeats (sse-starlette ping) — ignore.
       }
       if (!dataStr) continue;
       let data: any = dataStr;
       try {
         data = JSON.parse(dataStr);
       } catch {
-        // 保留原始字符串
+        // keep the raw string
       }
       yield { event, data };
     }

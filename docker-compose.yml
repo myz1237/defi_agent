@@ -1,16 +1,16 @@
-# 本地开发用 Postgres(trust 免密,仅监听 127.0.0.1)。生产请改密码并限制网络。
+# Local-dev Postgres (trust auth, bound to 127.0.0.1 only). For production, set a password and restrict networking.
 services:
   postgres:
     image: postgres:16.14-alpine3.23
     container_name: defi-agent-pg
     environment:
-      POSTGRES_HOST_AUTH_METHOD: trust   # 本地免密;切勿用于生产
+      POSTGRES_HOST_AUTH_METHOD: trust   # passwordless for local dev; never use in production
       POSTGRES_USER: postgres
       POSTGRES_DB: defi_agent
     ports:
-      - "127.0.0.1:5432:5432"            # 只绑本机,trust 下避免暴露
+      - "127.0.0.1:5432:5432"            # bind to localhost only (avoid exposure under trust auth)
     volumes:
-      - pgdata:/var/lib/postgresql/data  # 命名卷持久化
+      - pgdata:/var/lib/postgresql/data  # named volume for persistence
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d defi_agent"]
       interval: 5s
