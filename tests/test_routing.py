@@ -90,6 +90,21 @@ def test_guard_scope_maps_structured_decision(monkeypatch):
     assert out == {"in_scope": True, "intent": "knowledge", "protocol": "morpho", "scope_reason": "concept q"}
 
 
+def test_guard_scope_fails_closed_on_bad_output(monkeypatch):
+    """If the guard model returns unparseable JSON (json_mode has no API schema enforcement), refuse — don't crash."""
+
+    class _BoomLLM:
+        def with_structured_output(self, _schema, **_kw):
+            return self
+
+        def invoke(self, _msgs):
+            raise ValueError("model returned non-JSON prose")
+
+    monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _BoomLLM())
+    out = guard_scope(_state("show my Morpho positions"))
+    assert out["in_scope"] is False and out["intent"] == "other"
+
+
 def test_has_helpers():
     assert has_address({"address": "0x1"}) == "yes"
     assert has_address({}) == "no"

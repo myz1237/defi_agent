@@ -20,7 +20,7 @@ GUARD_PROMPT = (
     "wallet/transaction intents or when no specific protocol applies.\n"
     "Only set in_scope=false for topics unrelated to the above, an unsupported protocol/chain, or a write "
     "operation (transfer/sign/swap).\n"
-    "Respond ONLY with a JSON object with keys: \"in_scope\" (boolean), \"intent\" (one of "
+    "Respond ONLY with a json object with these keys: \"in_scope\" (boolean), \"intent\" (one of "
     "wallet|transaction|knowledge|other), \"protocol\" (one of lifi|morpho|both|none), \"reason\" (short string)."
 )
 

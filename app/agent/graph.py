@@ -62,11 +62,17 @@ class ScopeDecision(BaseModel):
 
 
 def guard_scope(state: AgentState) -> dict:
-    # DeepSeek's thinking models reject a forced tool_choice, so use JSON mode (GUARD_PROMPT spells out the schema).
+    # The default guard model (deepseek-v4-flash) is a thinking model that rejects a forced tool_choice, so use
+    # JSON mode (GUARD_PROMPT spells out the schema). JSON mode isn't API-schema-enforced, so if the model returns
+    # unparseable/out-of-schema JSON, fail closed to a refusal instead of 500-ing the whole turn.
     llm = ChatDeepSeek(model=settings.guard_model, temperature=0).with_structured_output(
         ScopeDecision, method="json_mode"
     )
-    decision: ScopeDecision = llm.invoke([_system(GUARD_PROMPT), *state["messages"]])
+    try:
+        decision: ScopeDecision = llm.invoke([_system(GUARD_PROMPT), *state["messages"]])
+    except Exception:  # noqa: BLE001  malformed guard output must not crash the turn
+        logger.exception("guard_scope structured output failed; refusing")
+        return {"in_scope": False, "intent": "other", "protocol": "none", "scope_reason": "guard parse error"}
     return {
         "in_scope": decision.in_scope,
         "intent": decision.intent,
