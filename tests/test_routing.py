@@ -1,6 +1,17 @@
 from langchain_core.messages import HumanMessage
 
-from app.agent.graph import extract_tx, extract_wallet, has_address, has_tx, route_after_guard
+import app.agent.graph as graph_mod
+from app.agent.graph import (
+    ScopeDecision,
+    extract_tx,
+    extract_wallet,
+    format_context,
+    guard_scope,
+    has_address,
+    has_tx,
+    route_after_guard,
+)
+from app.agent.knowledge.store import RetrievedChunk
 
 
 def _state(text: str) -> dict:
@@ -34,6 +45,49 @@ def test_route_after_guard():
     assert route_after_guard({"in_scope": False, "intent": "other"}) == "refuse"
     assert route_after_guard({"in_scope": True, "intent": "wallet"}) == "wallet"
     assert route_after_guard({"in_scope": True, "intent": "transaction"}) == "transaction"
+    assert route_after_guard({"in_scope": True, "intent": "knowledge"}) == "knowledge"
+
+
+def test_format_context_labels_and_orders_sources():
+    chunks = [
+        RetrievedChunk("morpho", "Liquidation", "Overview", "https://docs.morpho.org/liq", "body A"),
+        RetrievedChunk("lifi", None, "Status", "https://docs.li.fi/status", "body B"),
+    ]
+    out = format_context(chunks)
+    assert "[Source 1] Liquidation — https://docs.morpho.org/liq" in out
+    assert "[Source 2] Status — https://docs.li.fi/status" in out  # falls back to section when title is None
+    assert "body A" in out and "body B" in out
+
+
+def test_format_context_empty():
+    assert format_context([]) == ""
+
+
+def test_format_context_shares_source_number_for_same_url(monkeypatch):
+    url = "https://docs.morpho.org/liq"
+    chunks = [
+        RetrievedChunk("morpho", "Liquidation", "Overview", url, "part one"),
+        RetrievedChunk("morpho", "Liquidation", "Process", url, "part two"),
+    ]
+    out = format_context(chunks)
+    # both chunks from the same doc share [Source 1], so the model's unique Sources list stays clean
+    assert out.count("[Source 1]") == 2
+    assert "[Source 2]" not in out
+
+
+def test_guard_scope_maps_structured_decision(monkeypatch):
+    """guard_scope propagates the structured decision (incl. protocol) into state — offline, no API call."""
+
+    class _FakeLLM:
+        def with_structured_output(self, _schema):
+            return self
+
+        def invoke(self, _msgs):
+            return ScopeDecision(in_scope=True, intent="knowledge", protocol="morpho", reason="concept q")
+
+    monkeypatch.setattr(graph_mod, "ChatAnthropic", lambda **_k: _FakeLLM())
+    out = guard_scope(_state("how does morpho liquidation work"))
+    assert out == {"in_scope": True, "intent": "knowledge", "protocol": "morpho", "scope_reason": "concept q"}
 
 
 def test_has_helpers():

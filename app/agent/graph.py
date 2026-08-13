@@ -5,6 +5,7 @@
 - Exports `graph` (for LangGraph Studio; the platform provides its own persistence, so no checkpointer bound).
 """
 
+import logging
 import re
 from typing import Literal
 
@@ -16,11 +17,15 @@ from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 import app.agent.tools  # noqa: F401  trigger tool registration
-from app.agent.prompts import GUARD_PROMPT, REFUSE_TEXT, TX_SYSTEM, WALLET_SYSTEM
+from app.agent.knowledge import store
+from app.agent.knowledge.store import RetrievedChunk
+from app.agent.prompts import GUARD_PROMPT, KNOWLEDGE_SYSTEM, REFUSE_TEXT, TX_SYSTEM, WALLET_SYSTEM
 from app.agent.state import AgentState
 from app.agent.tools.explorer import get_balances, resolve_ens
 from app.agent.tools.registry import get_tools
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 TX_HASH_RE = re.compile(r"0x[a-fA-F0-9]{64}")
 ADDRESS_RE = re.compile(r"0x[a-fA-F0-9]{40}(?![a-fA-F0-9])")
@@ -50,20 +55,33 @@ def _last_human_text(messages) -> str:
 # ---------- Guard / classify ----------
 class ScopeDecision(BaseModel):
     in_scope: bool = Field(description="whether it is within the supported scope")
-    intent: Literal["wallet", "transaction", "other"]
+    intent: Literal["wallet", "transaction", "knowledge", "other"]
+    protocol: Literal["lifi", "morpho", "both", "none"] = Field(
+        default="none", description="which protocol a knowledge question is about"
+    )
     reason: str = Field(description="short reason")
 
 
 def guard_scope(state: AgentState) -> dict:
     llm = ChatAnthropic(model=settings.guard_model, temperature=0).with_structured_output(ScopeDecision)
     decision: ScopeDecision = llm.invoke([_cached_system(GUARD_PROMPT), *state["messages"]])
-    return {"in_scope": decision.in_scope, "intent": decision.intent, "scope_reason": decision.reason}
+    return {
+        "in_scope": decision.in_scope,
+        "intent": decision.intent,
+        "protocol": decision.protocol,
+        "scope_reason": decision.reason,
+    }
 
 
 def route_after_guard(state: AgentState) -> str:
     if not state.get("in_scope"):
         return "refuse"
-    return "wallet" if state.get("intent") == "wallet" else "transaction"
+    intent = state.get("intent")
+    if intent == "wallet":
+        return "wallet"
+    if intent == "knowledge":
+        return "knowledge"
+    return "transaction"
 
 
 def refuse(state: AgentState) -> dict:
@@ -121,6 +139,43 @@ def tx_agent(state: AgentState) -> dict:
     return {"messages": [llm.invoke([sys, *state["messages"]])]}
 
 
+# ---------- Knowledge (RAG) line ----------
+def format_context(chunks: list[RetrievedChunk]) -> str:
+    """Render retrieved chunks as labelled [Source N] blocks the model cites from verbatim.
+    Chunks sharing a source URL share one [Source N] and label, so the model's Sources list stays unique."""
+    order: dict[str, tuple[int, str]] = {}  # url -> (source number, label)
+    blocks = []
+    for c in chunks:
+        if c.source_url not in order:
+            order[c.source_url] = (len(order) + 1, c.title or c.section or c.protocol)
+        n, label = order[c.source_url]
+        blocks.append(f"[Source {n}] {label} — {c.source_url}\n{c.content}")
+    return "\n\n".join(blocks)
+
+
+async def retrieve_docs(state: AgentState) -> dict:
+    query = _last_human_text(state["messages"])
+    try:
+        chunks = await store.search(query, protocol=state.get("protocol"), k=5)
+    except Exception:  # noqa: BLE001  degrade like the tool lines rather than aborting the turn on infra failure
+        logger.exception("retrieve_docs failed")
+        chunks = []
+    return {"knowledge_context": format_context(chunks)}
+
+
+def knowledge_answer(state: AgentState) -> dict:
+    context = state.get("knowledge_context") or ""
+    # Retrieved docs go in a human message (not the system block) so untrusted text can't override the guardrails.
+    grounding = (
+        f"Retrieved documentation — answer using only this:\n\n{context}"
+        if context
+        else "No documentation was retrieved for this question."
+    )
+    llm = ChatAnthropic(model=settings.agent_model, temperature=0)
+    messages = [_cached_system(KNOWLEDGE_SYSTEM), HumanMessage(content=grounding), *state["messages"]]
+    return {"messages": [llm.invoke(messages)]}
+
+
 def build_graph() -> StateGraph:
     b = StateGraph(AgentState)
     b.add_node("guard", guard_scope)
@@ -133,14 +188,24 @@ def build_graph() -> StateGraph:
     b.add_node("clarify_tx", clarify_tx)
     b.add_node("tx_agent", tx_agent)
     b.add_node("tx_tools", ToolNode(TX_TOOLS))
+    b.add_node("retrieve_docs", retrieve_docs)
+    b.add_node("knowledge_answer", knowledge_answer)
 
     b.add_edge(START, "guard")
     b.add_conditional_edges(
         "guard",
         route_after_guard,
-        {"refuse": "refuse", "wallet": "extract_wallet", "transaction": "extract_tx"},
+        {
+            "refuse": "refuse",
+            "wallet": "extract_wallet",
+            "transaction": "extract_tx",
+            "knowledge": "retrieve_docs",
+        },
     )
     b.add_edge("refuse", END)
+
+    b.add_edge("retrieve_docs", "knowledge_answer")
+    b.add_edge("knowledge_answer", END)
 
     b.add_conditional_edges("extract_wallet", has_address, {"yes": "wallet_agent", "no": "clarify_wallet"})
     b.add_edge("clarify_wallet", "extract_wallet")

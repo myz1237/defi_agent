@@ -32,6 +32,7 @@ const SUGGESTIONS = [
     query: "Show Morpho positions for 0x7b524b0308a776a7d4E65A2Db73bB37881818748",
   },
   { label: "My Morpho positions", query: "Show my Morpho positions" },
+  { label: "How does Morpho liquidation work?", query: "How does Morpho liquidation work?" },
 ];
 
 export default function DefiChat() {

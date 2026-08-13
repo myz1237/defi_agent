@@ -4,6 +4,7 @@ The lifespan opens the async Postgres checkpointer and compiles the graph (singl
 SSE events: start / token / tool_call / tool_result / interrupt / done / error.
 """
 
+import asyncio
 import json
 import os
 import time
@@ -35,6 +36,13 @@ async def lifespan(app: FastAPI):
     app.state.audit = audit
     async with get_async_checkpointer() as cp:
         app.state.graph = builder.compile(checkpointer=cp)
+        # Warm the on-device embedding model now so the first knowledge query doesn't pay the load cost.
+        try:
+            from app.agent.knowledge.embed import embed_query
+
+            await asyncio.to_thread(embed_query, "warmup")
+        except Exception as e:  # noqa: BLE001  a warmup failure must not block boot
+            log_event("embed_warmup_failed", error=str(e))
         log_event("startup", checkpointer=type(cp).__name__, audit=bool(audit.pool))
         yield
     await audit.close()
@@ -83,15 +91,15 @@ def _scoped_thread(identity: Identity, thread_id: str | None) -> str:
     return f"{identity.user_id}::{uuid.uuid4().hex[:16]}"
 
 
-_AGENT_NODES = {"wallet_agent", "tx_agent"}
+_AGENT_NODES = {"wallet_agent", "tx_agent", "knowledge_answer"}
 
 
 async def _event_stream(graph, payload, config, thread_id: str, identity: Identity, kind: str, message: str):
     """Stream SSE events from the graph and write one audit_log row + structured log per turn.
 
     Uses two stream modes together:
-    - "messages": token-by-token deltas, filtered to the agent nodes (wallet_agent/tx_agent) so only
-      the assistant's natural-language reply streams (tool-call chunks and the guard call are skipped).
+    - "messages": token-by-token deltas, filtered to the agent nodes (wallet_agent/tx_agent/knowledge_answer)
+      so only the assistant's natural-language reply streams (tool-call chunks and the guard call are skipped).
     - "updates": tool_call / tool_result / interrupt, plus the refuse text (refuse is a non-model node,
       so it does not appear in the messages stream).
     """
