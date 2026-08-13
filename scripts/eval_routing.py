@@ -1,6 +1,6 @@
 """Routing eval: run guard_scope over labeled prompts and report accuracy.
 
-Doubles as a regression check for the scope guard. Real LLM calls (haiku); LangSmith
+Doubles as a regression check for the scope guard. Real LLM calls (the DeepSeek guard model); LangSmith
 tracing is captured automatically when LANGSMITH_TRACING is enabled.
 
 Run: uv run python scripts/eval_routing.py

@@ -1,6 +1,6 @@
 """Global configuration. Loaded from environment/.env (pydantic-settings).
 
-Key secrets come from .env: ANTHROPIC_API_KEY (read automatically by langchain-anthropic), LANGSMITH_*.
+Key secrets come from .env: DEEPSEEK_API_KEY (read automatically by langchain-deepseek), LANGSMITH_*.
 RPC endpoints live in app/chains/registry.py (default public nodes + env overrides).
 """
 
@@ -13,9 +13,10 @@ load_dotenv()
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Models: haiku for routing/guard (fast/cheap), sonnet for protocol analysis/rendering (default). No Opus.
-    guard_model: str = "claude-haiku-4-5-20251001"
-    agent_model: str = "claude-sonnet-4-6"
+    # DeepSeek models: flash for routing/guard (fast/cheap), pro for protocol analysis/rendering.
+    # Override via env (GUARD_MODEL / AGENT_MODEL) if the DeepSeek model IDs differ.
+    guard_model: str = "deepseek-v4-flash"
+    agent_model: str = "deepseek-v4-pro"
 
     # Protocol API endpoints
     lifi_base_url: str = "https://li.quest"  # GET /v1/status

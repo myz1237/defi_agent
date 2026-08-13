@@ -73,7 +73,7 @@ def _sse(event: str, payload: dict) -> dict:
 
 
 def _text_of(content) -> str:
-    """Extract plain text from message content (Anthropic may return a list of content blocks)."""
+    """Extract plain text from message content (some providers may return a list of content blocks)."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):

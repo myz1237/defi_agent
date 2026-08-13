@@ -79,13 +79,13 @@ def test_guard_scope_maps_structured_decision(monkeypatch):
     """guard_scope propagates the structured decision (incl. protocol) into state — offline, no API call."""
 
     class _FakeLLM:
-        def with_structured_output(self, _schema):
+        def with_structured_output(self, _schema, **_kw):
             return self
 
         def invoke(self, _msgs):
             return ScopeDecision(in_scope=True, intent="knowledge", protocol="morpho", reason="concept q")
 
-    monkeypatch.setattr(graph_mod, "ChatAnthropic", lambda **_k: _FakeLLM())
+    monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _FakeLLM())
     out = guard_scope(_state("how does morpho liquidation work"))
     assert out == {"in_scope": True, "intent": "knowledge", "protocol": "morpho", "scope_reason": "concept q"}
 

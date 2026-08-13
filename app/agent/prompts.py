@@ -19,7 +19,9 @@ GUARD_PROMPT = (
     "Also set protocol to which protocol the question concerns: 'lifi', 'morpho', 'both', or 'none'. Use 'none' for "
     "wallet/transaction intents or when no specific protocol applies.\n"
     "Only set in_scope=false for topics unrelated to the above, an unsupported protocol/chain, or a write "
-    "operation (transfer/sign/swap)."
+    "operation (transfer/sign/swap).\n"
+    "Respond ONLY with a JSON object with keys: \"in_scope\" (boolean), \"intent\" (one of "
+    "wallet|transaction|knowledge|other), \"protocol\" (one of lifi|morpho|both|none), \"reason\" (short string)."
 )
 
 REFUSE_TEXT = (

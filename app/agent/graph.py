@@ -1,6 +1,6 @@
 """DeFi Agent graph: deterministic routing (guard/classify/extract) + protocol tool agents (wallet/tx lines).
 
-- system+tools use Anthropic prompt caching (_cached_system sets the cache breakpoint, dynamic content after it).
+- Static prompt text comes first so DeepSeek's automatic context (prefix) caching can hit; dynamic content follows.
 - interrupt() handles missing input.
 - Exports `graph` (for LangGraph Studio; the platform provides its own persistence, so no checkpointer bound).
 """
@@ -9,8 +9,8 @@ import logging
 import re
 from typing import Literal
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import interrupt
@@ -36,13 +36,12 @@ WALLET_TOOLS = get_tools(["morpho"]) + [resolve_ens, get_balances]
 TX_TOOLS = get_tools(["explorer", "lifi", "morpho"])
 
 
-def _cached_system(static_text: str, dynamic_text: str | None = None) -> SystemMessage:
-    """Cache the system message with cache_control; Anthropic caches the tools+system prefix together.
-    Dynamic content goes after the cache breakpoint to avoid busting the cache."""
-    blocks: list[dict] = [{"type": "text", "text": static_text, "cache_control": {"type": "ephemeral"}}]
-    if dynamic_text:
-        blocks.append({"type": "text", "text": dynamic_text})
-    return SystemMessage(content=blocks)
+def _system(static_text: str, dynamic_text: str | None = None) -> SystemMessage:
+    """Build the system message with the static prompt first, dynamic content (resolved address/hash) after.
+    DeepSeek caches common prefixes automatically, so no manual cache annotation is needed; keeping the static
+    text first still lets its prefix cache hit across calls."""
+    text = static_text if not dynamic_text else f"{static_text}\n\n{dynamic_text}"
+    return SystemMessage(content=text)
 
 
 def _last_human_text(messages) -> str:
@@ -63,8 +62,11 @@ class ScopeDecision(BaseModel):
 
 
 def guard_scope(state: AgentState) -> dict:
-    llm = ChatAnthropic(model=settings.guard_model, temperature=0).with_structured_output(ScopeDecision)
-    decision: ScopeDecision = llm.invoke([_cached_system(GUARD_PROMPT), *state["messages"]])
+    # DeepSeek's thinking models reject a forced tool_choice, so use JSON mode (GUARD_PROMPT spells out the schema).
+    llm = ChatDeepSeek(model=settings.guard_model, temperature=0).with_structured_output(
+        ScopeDecision, method="json_mode"
+    )
+    decision: ScopeDecision = llm.invoke([_system(GUARD_PROMPT), *state["messages"]])
     return {
         "in_scope": decision.in_scope,
         "intent": decision.intent,
@@ -110,8 +112,8 @@ def clarify_wallet(state: AgentState) -> dict:
 
 
 def wallet_agent(state: AgentState) -> dict:
-    llm = ChatAnthropic(model=settings.agent_model, temperature=0).bind_tools(WALLET_TOOLS)
-    sys = _cached_system(WALLET_SYSTEM, f"Known wallet address/ENS: {state.get('address')}")
+    llm = ChatDeepSeek(model=settings.agent_model, temperature=0).bind_tools(WALLET_TOOLS)
+    sys = _system(WALLET_SYSTEM, f"Known wallet address/ENS: {state.get('address')}")
     return {"messages": [llm.invoke([sys, *state["messages"]])]}
 
 
@@ -134,8 +136,8 @@ def clarify_tx(state: AgentState) -> dict:
 
 
 def tx_agent(state: AgentState) -> dict:
-    llm = ChatAnthropic(model=settings.agent_model, temperature=0).bind_tools(TX_TOOLS)
-    sys = _cached_system(TX_SYSTEM, f"Known transaction hash: {state.get('tx_hash')}")
+    llm = ChatDeepSeek(model=settings.agent_model, temperature=0).bind_tools(TX_TOOLS)
+    sys = _system(TX_SYSTEM, f"Known transaction hash: {state.get('tx_hash')}")
     return {"messages": [llm.invoke([sys, *state["messages"]])]}
 
 
@@ -171,8 +173,8 @@ def knowledge_answer(state: AgentState) -> dict:
         if context
         else "No documentation was retrieved for this question."
     )
-    llm = ChatAnthropic(model=settings.agent_model, temperature=0)
-    messages = [_cached_system(KNOWLEDGE_SYSTEM), HumanMessage(content=grounding), *state["messages"]]
+    llm = ChatDeepSeek(model=settings.agent_model, temperature=0)
+    messages = [_system(KNOWLEDGE_SYSTEM), HumanMessage(content=grounding), *state["messages"]]
     return {"messages": [llm.invoke(messages)]}
 
 

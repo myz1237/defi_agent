@@ -1,4 +1,4 @@
-"""Guard classification checks against the real guard model (skipped without ANTHROPIC_API_KEY).
+"""Guard classification checks against the real guard model (skipped without DEEPSEEK_API_KEY).
 
 Doubles as the routing eval for the knowledge intent: it asserts the guard labels conceptual protocol
 questions as in-scope `knowledge` with the right protocol, and keeps wallet/tx/off-topic classified as before.
@@ -11,7 +11,7 @@ from langchain_core.messages import HumanMessage
 
 from app.agent.graph import guard_scope
 
-pytestmark = pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY"), reason="no ANTHROPIC_API_KEY")
+pytestmark = pytest.mark.skipif(not os.getenv("DEEPSEEK_API_KEY"), reason="no DEEPSEEK_API_KEY")
 
 
 def _guard(text: str) -> dict:

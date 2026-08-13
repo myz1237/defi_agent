@@ -30,12 +30,13 @@ user ─→ guard_scope ─→ ┤ tx line ─────────→ extrac
 - **Missing input** (no address/hash) triggers an `interrupt()` that asks the user, then resumes.
 - **Cards from tool artifacts:** tools return a human string for the LLM *and* a structured artifact; the API emits a
   `card` SSE event so the frontend renders a `LifiStatusCard` / `MorphoPositionsCard`.
-- **Prompt caching:** system prompt + tools are cached via `cache_control` for cheaper/faster calls.
+- **Prompt caching:** static prompt text comes first so DeepSeek's automatic context (prefix) caching hits;
+  dynamic content (resolved address/hash, retrieved docs) follows.
 
 ## Stack
 
-- **Backend:** Python 3.11 · [uv](https://docs.astral.sh/uv/) · LangGraph + `langchain-anthropic`
-  (Haiku for routing/guard, Sonnet for analysis) · FastAPI + SSE · web3 · httpx
+- **Backend:** Python 3.11 · [uv](https://docs.astral.sh/uv/) · LangGraph + `langchain-deepseek`
+  (deepseek-v4-flash for routing/guard, deepseek-v4-pro for analysis) · FastAPI + SSE · web3 · httpx
 - **Storage:** PostgreSQL — LangGraph Postgres checkpointer (durable conversations + interrupt resume), business
   tables (`users` / `api_keys` / `threads`), and a `doc_chunks` **pgvector** table (HNSW cosine index) via
   SQLAlchemy + Alembic
@@ -52,7 +53,7 @@ Prerequisites: `uv`, Node 22+, Docker.
 # 1. Local Postgres with pgvector (trust auth, bound to 127.0.0.1)
 docker compose up -d
 
-# 2. Environment — copy and fill in ANTHROPIC_API_KEY (RPC endpoints default to public nodes)
+# 2. Environment — copy and fill in DEEPSEEK_API_KEY (RPC endpoints default to public nodes)
 cp .env.example .env
 #   DATABASE_URL=postgresql+asyncpg://postgres@localhost:5432/defi_agent
 #   LANGGRAPH_PG_DSN=postgresql://postgres@localhost:5432/defi_agent
@@ -109,7 +110,7 @@ uv run ruff check app/ scripts/ tests/  # lint
 ```
 
 Retrieval tests skip automatically when the pgvector `doc_chunks` table isn't reachable; the real-model guard
-classification test skips without `ANTHROPIC_API_KEY`. The routing eval covers the knowledge intent alongside
+classification test skips without `DEEPSEEK_API_KEY`. The routing eval covers the knowledge intent alongside
 wallet / transaction / refuse.
 
 Verified real-data fixtures (Ethereum mainnet):
