@@ -19,5 +19,10 @@ wheels/
 # AI Files
 CLAUDE.md
 PROGRESS.md
+skills-lock.json
+.agents
+.claude
+.langgraph_api
+.scratch
 
 .ruff_*
