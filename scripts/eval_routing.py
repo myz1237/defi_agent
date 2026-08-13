@@ -15,7 +15,7 @@ from langchain_core.messages import HumanMessage  # noqa: E402
 
 from app.agent.graph import guard_scope  # noqa: E402
 
-# (prompt, expected_route) where route is one of: wallet | transaction | refuse
+# (prompt, expected_route) where route is one of: wallet | transaction | knowledge | refuse
 CASES: list[tuple[str, str]] = [
     ("What's the weather today?", "refuse"),
     ("Tell me a joke", "refuse"),
@@ -29,6 +29,8 @@ CASES: list[tuple[str, str]] = [
     ("Show Morpho positions for 0x7b524b0308a776a7d4E65A2Db73bB37881818748", "wallet"),
     ("What are vitalik.eth's balances?", "wallet"),
     ("Does 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c have any Morpho debt?", "wallet"),
+    ("How does Morpho liquidation work?", "knowledge"),  # conceptual, no address/hash
+    ("What does a PENDING LI.FI transfer status mean?", "knowledge"),
 ]
 
 
