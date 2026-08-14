@@ -32,7 +32,10 @@ def _rows_for_page(protocol: str, url: str, raw_md: str, slug: str) -> list[dict
     chunks = chunk_markdown(md)
     if not chunks:
         return []
-    vectors = embed_passages([c.content for c in chunks])
+    # Embed the page title alongside each chunk so it's retrievable by the page's name (e.g. "Morpho Blue"),
+    # even when the body only uses other phrasing. Stored content stays clean; the title is shown separately
+    # at answer time via the [Source] label.
+    vectors = embed_passages([f"{title}\n\n{c.content}" for c in chunks])
     return [
         {
             "protocol": protocol,
