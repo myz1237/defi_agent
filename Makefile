@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 PORT ?= 8001
 
-.PHONY: help install env setup db-up db-down migrate ingest \
+.PHONY: help install env setup db-up db-down migrate fetch ingest \
         api cli studio web web-install test eval lint fmt check clean
 
 help: ## Show this help
@@ -29,7 +29,10 @@ db-down: ## Stop local Postgres
 migrate: ## Apply Alembic migrations (business tables + doc_chunks)
 	uv run alembic upgrade head
 
-ingest: ## Ingest LI.FI/Morpho docs into the pgvector store (idempotent)
+fetch: ## Refresh the vendored docs/ corpus from the LI.FI/Morpho sites
+	uv run python scripts/fetch_docs.py
+
+ingest: ## Ingest the vendored docs/ into the pgvector store (idempotent)
 	uv run python scripts/ingest_docs.py
 
 ## --- Run ---

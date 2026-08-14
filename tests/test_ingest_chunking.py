@@ -25,6 +25,38 @@ def test_extract_title_uses_first_h1_else_fallback():
     assert extract_title("no heading here", "slug") == "slug"
 
 
+def test_strip_mdx_drops_boilerplate_and_anchors():
+    # LI.FI llms.txt blockquote, Morpho "Source:" line, lowercase <figure>, and Mintlify [#anchor]s all go.
+    md = (
+        "> ## Documentation Index\n"
+        "> Fetch the complete documentation index at: https://docs.li.fi/llms.txt\n\n"
+        "# Oracles [#oracles]\n\n"
+        "Source: https://docs.morpho.org/learn/concepts/oracle\n\n"
+        "<figure>\n  <ZoomableImage src='/x.png' />\n</figure>\n\n"
+        "An oracle prices collateral. **Health Factor** [#health-factor] matters.\n"
+    )
+    out = strip_mdx(md)
+    assert "llms.txt" not in out and "Documentation Index" not in out
+    assert "Source:" not in out
+    assert "<figure>" not in out and "ZoomableImage" not in out
+    assert "[#" not in out  # anchors stripped on headings and inline
+    assert "# Oracles" in out and "An oracle prices collateral." in out and "**Health Factor**" in out
+
+
+def test_chunk_markdown_drops_image_only_section():
+    # An image/scaffolding-only section carries no retrievable text and must not become a chunk.
+    md = (
+        "# Variable Rate Market\n\n"
+        "<figure>\n</figure>\n\n"
+        "## What is it?\n\n"
+        "A variable rate market pairs one collateral asset with one loan asset for isolated lending.\n"
+    )
+    chunks = chunk_markdown(strip_mdx(md))
+    sections = [c.section for c in chunks]
+    assert "Variable Rate Market" not in sections  # empty H1 intro dropped
+    assert sections == ["What is it?"]
+
+
 def test_chunk_markdown_splits_by_heading_and_carries_section():
     md = "# Doc\n\n## Alpha\n\nfirst body\n\n## Beta\n\nsecond body\n"
     chunks = chunk_markdown(md)

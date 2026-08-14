@@ -41,7 +41,8 @@ user ─→ guard_scope ─→ ┤ tx line ─────────→ extrac
   tables (`users` / `api_keys` / `threads`), and a `doc_chunks` **pgvector** table (HNSW cosine index) via
   SQLAlchemy + Alembic
 - **RAG:** on-device embeddings ([`bge-small`](https://huggingface.co/BAAI/bge-small-en-v1.5), 384-dim, via
-  `sentence-transformers`) — no embedding API calls; docs ingested from the LI.FI & Morpho sites as markdown
+  `sentence-transformers`) — no embedding API calls; docs are vendored under `docs/` (a version-controlled markdown
+  mirror of the LI.FI & Morpho sites) and cleaned of MDX/HTML noise at ingest time
 - **Frontend:** Next.js (App Router) + React — vendored card UI in `web/chat-ui/`, consumes the SSE stream
 - **Observability:** LangSmith tracing · structured JSON logs · `audit_log` table · routing eval
 
@@ -61,7 +62,8 @@ cp .env.example .env
 # 3. Migrations — business tables + the pgvector doc_chunks store
 uv run alembic upgrade head
 
-# 4. Ingest the LI.FI & Morpho docs into pgvector (downloads bge-small on first run; re-runnable/idempotent)
+# 4. Ingest the vendored LI.FI & Morpho docs (docs/) into pgvector
+#    (downloads bge-small on first run; re-runnable/idempotent). Refresh the corpus with fetch_docs.py.
 uv run python scripts/ingest_docs.py
 ```
 
@@ -130,7 +132,8 @@ app/
   chains/            # chain registry (5 chains) + web3 clients
   storage/           # SQLAlchemy models (incl. doc_chunks), engine, repo
   observability/     # structured logging, audit_log
-scripts/             # chat.py (CLI), eval_routing.py, ingest_docs.py (doc ingestion)
+docs/                # vendored LI.FI/Morpho markdown corpus + manifest.json (RAG source)
+scripts/             # chat.py (CLI), eval_routing.py, fetch_docs.py, ingest_docs.py
 migrations/          # Alembic
 tests/               # pytest
 web/                 # Next.js frontend (chat-ui card library + DefiChat host)

@@ -1,0 +1,23 @@
+{
+  "lifi/faqs-route-availability.md": "https://docs.li.fi/faqs/route-availability",
+  "lifi/faqs-slippage-price-impact.md": "https://docs.li.fi/faqs/slippage-price-impact",
+  "lifi/guides-debug-failed-transactions.md": "https://docs.li.fi/guides/debug-failed-transactions",
+  "lifi/introduction-introduction.md": "https://docs.li.fi/introduction/introduction",
+  "lifi/introduction-learn-more-security-and-audits.md": "https://docs.li.fi/introduction/learn-more/security-and-audits",
+  "lifi/introduction-product-stack.md": "https://docs.li.fi/introduction/product-stack",
+  "lifi/introduction-tools.md": "https://docs.li.fi/introduction/tools",
+  "lifi/introduction-user-flows-and-examples-difference-between-quote-and-route.md": "https://docs.li.fi/introduction/user-flows-and-examples/difference-between-quote-and-route",
+  "lifi/introduction-user-flows-and-examples-requesting-route-fetching-quote.md": "https://docs.li.fi/introduction/user-flows-and-examples/requesting-route-fetching-quote",
+  "lifi/introduction-user-flows-and-examples-status-tracking.md": "https://docs.li.fi/introduction/user-flows-and-examples/status-tracking",
+  "morpho/developers-borrow-concepts-interest-rates.md": "https://docs.morpho.org/developers/borrow/concepts/interest-rates",
+  "morpho/developers-borrow-concepts-liquidation.md": "https://docs.morpho.org/developers/borrow/concepts/liquidation",
+  "morpho/developers-borrow-concepts-ltv.md": "https://docs.morpho.org/developers/borrow/concepts/ltv",
+  "morpho/developers-borrow-concepts-market-mechanics.md": "https://docs.morpho.org/developers/borrow/concepts/market-mechanics",
+  "morpho/developers-earn-concepts-vault-mechanics.md": "https://docs.morpho.org/developers/earn/concepts/vault-mechanics",
+  "morpho/learn-concepts-blue.md": "https://docs.morpho.org/learn/concepts/blue",
+  "morpho/learn-concepts-irm.md": "https://docs.morpho.org/learn/concepts/irm",
+  "morpho/learn-concepts-liquidation.md": "https://docs.morpho.org/learn/concepts/liquidation",
+  "morpho/learn-concepts-oracle.md": "https://docs.morpho.org/learn/concepts/oracle",
+  "morpho/learn-concepts-vault-v2.md": "https://docs.morpho.org/learn/concepts/vault-v2",
+  "morpho/learn-resources-risks.md": "https://docs.morpho.org/learn/resources/risks"
+}
