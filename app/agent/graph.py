@@ -76,7 +76,10 @@ def guard_scope(state: AgentState) -> dict:
         ScopeDecision, method="json_mode"
     )
     try:
-        decision: ScopeDecision = llm.invoke([_system(GUARD_PROMPT), *state["messages"]])
+        # Classify only the latest user message — not the whole history. Passing a long/complex history (tool
+        # calls, results, reasoning) destabilizes JSON mode and can make it return non-JSON, tripping the fallback.
+        latest = HumanMessage(content=_last_human_text(state["messages"]))
+        decision: ScopeDecision = llm.invoke([_system(GUARD_PROMPT), latest])
     except Exception:  # noqa: BLE001  malformed guard output must not crash the turn
         logger.exception("guard_scope structured output failed; refusing")
         return {"in_scope": False, "intent": "other", "protocol": "none", "scope_reason": "guard parse error"}
