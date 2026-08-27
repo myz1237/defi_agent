@@ -161,18 +161,14 @@ def format_context(chunks: list[RetrievedChunk]) -> str:
     return "\n\n".join(blocks)
 
 
-async def retrieve_docs(state: AgentState) -> dict:
-    query = _last_human_text(state["messages"])
+async def knowledge_answer(state: AgentState) -> dict:
+    """Direct RAG: retrieve protocol-scoped chunks and answer only from them."""
     try:
-        chunks = await store.search(query, protocol=state.get("protocol"), k=5)
-    except Exception:  # noqa: BLE001  degrade like the tool lines rather than aborting the turn on infra failure
-        logger.exception("retrieve_docs failed")
+        chunks = await store.search(_last_human_text(state["messages"]), protocol=state.get("protocol"), k=5)
+    except Exception:  # noqa: BLE001  degrade rather than aborting the turn on a retrieval/infra failure
+        logger.exception("doc retrieval failed")
         chunks = []
-    return {"knowledge_context": format_context(chunks)}
-
-
-def knowledge_answer(state: AgentState) -> dict:
-    context = state.get("knowledge_context") or ""
+    context = format_context(chunks)
     # Retrieved docs go in a human message (not the system block) so untrusted text can't override the guardrails.
     grounding = (
         f"Retrieved documentation — answer using only this:\n\n{context}"
@@ -181,7 +177,7 @@ def knowledge_answer(state: AgentState) -> dict:
     )
     llm = ChatDeepSeek(model=settings.agent_model, temperature=0)
     messages = [_system(KNOWLEDGE_SYSTEM), HumanMessage(content=grounding), *state["messages"]]
-    return {"messages": [llm.invoke(messages)]}
+    return {"messages": [await llm.ainvoke(messages)]}
 
 
 def build_graph() -> StateGraph:
@@ -196,7 +192,6 @@ def build_graph() -> StateGraph:
     b.add_node("clarify_tx", clarify_tx)
     b.add_node("tx_agent", tx_agent)
     b.add_node("tx_tools", ToolNode(TX_TOOLS))
-    b.add_node("retrieve_docs", retrieve_docs)
     b.add_node("knowledge_answer", knowledge_answer)
 
     b.add_edge(START, "guard")
@@ -207,12 +202,11 @@ def build_graph() -> StateGraph:
             "refuse": "refuse",
             "wallet": "extract_wallet",
             "transaction": "extract_tx",
-            "knowledge": "retrieve_docs",
+            "knowledge": "knowledge_answer",
         },
     )
     b.add_edge("refuse", END)
 
-    b.add_edge("retrieve_docs", "knowledge_answer")
     b.add_edge("knowledge_answer", END)
 
     b.add_conditional_edges("extract_wallet", has_address, {"yes": "wallet_agent", "no": "clarify_wallet"})

@@ -14,4 +14,3 @@ class AgentState(TypedDict, total=False):
     address: str | None  # extracted wallet address or ENS name
     tx_hash: str | None  # extracted transaction hash
     connected_address: str | None  # connected (SIWE) wallet address, used as fallback for "my ..." queries
-    knowledge_context: str  # retrieved doc chunks (formatted) for the knowledge line to answer from

@@ -18,7 +18,7 @@ extraction, refusal, human-in-the-loop clarification) plus tool-calling agents f
 ```
                        ┌─ wallet line ────→ extract address/ENS ─→ wallet_agent ─→ [Morpho positions, balance]
 user ─→ guard_scope ─→ ┤ tx line ─────────→ extract tx hash ────→ tx_agent ─────→ [Explorer, LI.FI status, Morpho]
-     (intent+protocol) ┤ knowledge line ──→ retrieve_docs ───────→ knowledge_answer → [grounded answer + sources]
+     (intent+protocol) ┤ knowledge line ──→ knowledge_answer (retrieve + answer) → [grounded answer + sources]
                        └─ out of scope ───→ refuse
 ```
 
