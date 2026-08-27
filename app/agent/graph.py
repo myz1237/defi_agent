@@ -28,7 +28,7 @@ from app.agent.prompts import (
     WALLET_SYSTEM,
 )
 from app.agent.state import AgentState
-from app.agent.tools.explorer import get_balances, resolve_ens
+from app.agent.tools.explorer import get_balances, resolve_ens, resolve_ens_address
 from app.agent.tools.registry import get_tools
 from app.config import settings
 
@@ -111,9 +111,12 @@ def extract_wallet(state: AgentState) -> dict:
     text = _last_human_text(state["messages"])
     m = ADDRESS_RE.search(text) or ENS_RE.search(text)
     if m:
-        return {"address": m.group(0)}
-    # No address in the message — fall back to the connected wallet ("my positions", "check my balance").
-    return {"address": state.get("connected_address")}
+        addr = m.group(0)
+        if addr.lower().endswith(".eth"):
+            addr = resolve_ens_address(addr) or addr  # store the canonical 0x, falling back to the ENS if unresolved
+        return {"address": addr}
+    # No address in the message — reuse the previously resolved address, else the connected ("my ...") wallet.
+    return {"address": state.get("address") or state.get("connected_address")}
 
 
 def has_address(state: AgentState) -> str:

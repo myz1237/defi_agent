@@ -27,12 +27,26 @@ def test_extract_wallet_address():
     assert s["address"] == "0x7b524b0308a776a7d4E65A2Db73bB37881818748"
 
 
-def test_extract_wallet_ens():
-    assert extract_wallet(_state("balances of vitalik.eth"))["address"] == "vitalik.eth"
+def test_extract_wallet_ens_resolves_to_address(monkeypatch):
+    # An ENS is resolved to its canonical 0x address and stored (not the ENS name).
+    monkeypatch.setattr(graph_mod, "resolve_ens_address", lambda _n: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045")
+    assert extract_wallet(_state("balances of vitalik.eth"))["address"] == "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+
+
+def test_extract_wallet_ens_falls_back_to_name_when_unresolved(monkeypatch):
+    monkeypatch.setattr(graph_mod, "resolve_ens_address", lambda _n: None)
+    assert extract_wallet(_state("balances of nope.eth"))["address"] == "nope.eth"
 
 
 def test_extract_wallet_none():
     assert extract_wallet(_state("show my wallet"))["address"] is None
+
+
+def test_extract_wallet_reuses_prior_resolved_address():
+    # A follow-up with no address reuses the previously resolved 0x (not clobbered to None).
+    prior = "0xABCabc0000000000000000000000000000000000"
+    state = {"messages": [HumanMessage(content="check its balance")], "address": prior}
+    assert extract_wallet(state)["address"] == prior
 
 
 def test_extract_tx_hash():

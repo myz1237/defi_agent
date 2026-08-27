@@ -113,15 +113,22 @@ def get_transaction_receipt_logs(tx_hash: str, chain: str = "ethereum") -> str:
     return "\n".join(lines)
 
 
+def resolve_ens_address(name: str) -> str | None:
+    """ENS name -> checksummed address (mainnet), or None if it's not an ENS name / doesn't resolve / errors."""
+    if not name.lower().endswith(".eth"):
+        return None
+    try:
+        return get_ens_web3().ens.address(name)
+    except Exception:  # noqa: BLE001  resolution is best-effort; callers keep the ENS on failure
+        return None
+
+
 @tool
 def resolve_ens(name: str) -> str:
     """Resolve an ENS name (e.g. vitalik.eth) to an address. Uses mainnet; the address works on all chains."""
     if not name.lower().endswith(".eth"):
         return f"{name} is not an ENS name (must end with .eth)."
-    try:
-        addr = get_ens_web3().ens.address(name)
-    except Exception as e:
-        return f"ENS resolution failed: {e}"
+    addr = resolve_ens_address(name)
     return f"{name} -> {addr}" if addr else f"{name} did not resolve to an address (no addr record)."
 
 
