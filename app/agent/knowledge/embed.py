@@ -1,7 +1,8 @@
-"""Local text embeddings for RAG (bge-small, 384-dim). The model is loaded lazily and reused.
+"""Local text embeddings for RAG (bge-small, 384-dim, 512-token context). Loaded lazily and reused.
 
-No external API: retrieval and ingestion both embed on-device. bge retrieval is asymmetric, so the
-query gets an instruction prefix while passages do not.
+No external API: retrieval and ingestion both embed on-device. bge retrieval is asymmetric, so the query
+gets an instruction prefix while passages do not. The tokenizer is exposed so chunking can budget by real
+tokens (chunks are kept small enough that Contextual Retrieval's context + chunk stays under 512).
 """
 
 from functools import lru_cache
@@ -15,6 +16,11 @@ def _model():
     from sentence_transformers import SentenceTransformer
 
     return SentenceTransformer(MODEL_NAME)
+
+
+def get_tokenizer():
+    """The embedding model's HuggingFace tokenizer (for token-budget-aware chunking)."""
+    return _model().tokenizer
 
 
 def embed_passages(texts: list[str]) -> list[list[float]]:

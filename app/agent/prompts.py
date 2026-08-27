@@ -33,6 +33,14 @@ REFUSE_TEXT = (
     "Please ask a different wallet-, transaction-, or protocol-concept question."
 )
 
+CONTEXT_GEN_INSTRUCTION = (
+    "You situate a chunk within its source document to improve search retrieval (Anthropic's Contextual "
+    "Retrieval). Given the full document below and a chunk from it, write a SHORT context — one or two sentences, "
+    "at most ~50 words — that says what the chunk is about and where it sits in the document (the protocol, the "
+    "concept/section). Use only information from the document. Output ONLY the context sentence(s), nothing else — "
+    "no preamble, no quotes, no restating the chunk."
+)
+
 QUERY_REWRITE_PROMPT = (
     "You rewrite the user's latest message into a single, self-contained search query for retrieving LI.FI and "
     "Morpho protocol documentation. Use the conversation only for context: resolve pronouns and references to the "

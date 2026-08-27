@@ -18,7 +18,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import delete  # noqa: E402
 
-from app.agent.knowledge.embed import embed_passages  # noqa: E402
+from app.agent.knowledge.context import contextualize  # noqa: E402
+from app.agent.knowledge.embed import embed_passages, get_tokenizer  # noqa: E402
 from app.agent.knowledge.ingest import chunk_markdown, extract_title, strip_mdx  # noqa: E402
 from app.storage.db import get_sessionmaker  # noqa: E402
 from app.storage.models import DocChunk  # noqa: E402
@@ -26,16 +27,21 @@ from app.storage.models import DocChunk  # noqa: E402
 DOCS_DIR = pathlib.Path(__file__).resolve().parent.parent / "docs"
 
 
-def _rows_for_page(protocol: str, url: str, raw_md: str, slug: str) -> list[dict]:
+async def _rows_for_page(protocol: str, url: str, raw_md: str, slug: str) -> list[dict]:
     md = strip_mdx(raw_md)
     title = extract_title(md, slug)
-    chunks = chunk_markdown(md)
+    chunks = chunk_markdown(md, tokenizer=get_tokenizer())  # token-budget chunking (embedding model's tokenizer)
     if not chunks:
         return []
-    # Embed the page title alongside each chunk so it's retrievable by the page's name (e.g. "Morpho Blue"),
-    # even when the body only uses other phrasing. Stored content stays clean; the title is shown separately
-    # at answer time via the [Source] label.
-    vectors = embed_passages([f"{title}\n\n{c.content}" for c in chunks])
+    # Contextual Retrieval: prepend an LLM-generated context to each chunk before embedding, so the vector
+    # carries document-level context. Fall back to the page title when context generation failed, so a chunk
+    # stays retrievable by the page's name (e.g. "Morpho Blue"). Stored `content` stays clean.
+    contexts = await contextualize(md, [c.content for c in chunks])
+    embed_texts = [
+        f"{ctx}\n\n{c.content}" if ctx else f"{title}\n\n{c.content}"
+        for ctx, c in zip(contexts, chunks, strict=True)
+    ]
+    vectors = embed_passages(embed_texts)
     return [
         {
             "protocol": protocol,
@@ -44,9 +50,10 @@ def _rows_for_page(protocol: str, url: str, raw_md: str, slug: str) -> list[dict
             "section": c.section,
             "chunk_index": i,
             "content": c.content,
+            "context": ctx or None,
             "embedding": v,
         }
-        for i, (c, v) in enumerate(zip(chunks, vectors, strict=True))
+        for i, (c, ctx, v) in enumerate(zip(chunks, contexts, vectors, strict=True))
     ]
 
 
@@ -67,7 +74,7 @@ async def main() -> None:
             print(f"  skip {rel} (missing)")
             failed.add(protocol)
             continue
-        rows = _rows_for_page(protocol, url, path.read_text(encoding="utf-8"), pathlib.Path(rel).stem)
+        rows = await _rows_for_page(protocol, url, path.read_text(encoding="utf-8"), pathlib.Path(rel).stem)
         if rows:
             by_protocol.setdefault(protocol, []).extend(rows)
             pages_ok += 1

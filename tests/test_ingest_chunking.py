@@ -92,18 +92,10 @@ def test_strip_mdx_and_headings_are_code_fence_aware():
     assert extract_title(out, "slug") == "Setup"
 
 
-def test_chunk_stays_within_max_chars_including_prefix():
-    body = " ".join(["word"] * 400)  # long section with spaces to break on
-    md = f"## Section\n\n{body}\n"
-    chunks = chunk_markdown(md, max_chars=300, overlap=50)
-    assert all(len(c.content) <= 300 for c in chunks)  # prefix accounted for; no mid-word overflow
-
-
-def test_chunk_markdown_windows_long_sections_with_overlap():
-    body = "x" * 3000  # one long section, no internal headings
+def test_chunk_markdown_windows_long_sections_and_prefixes_heading():
+    body = " ".join(["word"] * 800)  # ~4000 chars, well over the char-fallback budget
     md = f"## Big\n\n{body}\n"
-    chunks = chunk_markdown(md, max_chars=1000, overlap=200)
-    assert len(chunks) >= 3  # 3000 chars / (1000-200 step) -> multiple windows
+    chunks = chunk_markdown(md)  # no tokenizer -> char-budget fallback
+    assert len(chunks) >= 2  # a long section is split into multiple windows
     assert all(c.section == "Big" for c in chunks)
-    # consecutive chunks overlap: end of chunk N shares text with start of chunk N+1 (both are the 'x' body)
-    assert all(c.content.startswith("Big\n\n") for c in chunks)
+    assert all(c.content.startswith("Big\n\n") for c in chunks)  # heading prepended to each chunk

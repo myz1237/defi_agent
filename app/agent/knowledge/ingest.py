@@ -8,6 +8,8 @@ statements inside ``` code fences are left untouched.
 import re
 from dataclasses import dataclass
 
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 # HTML/JSX tags, either case — e.g. <Callout>, <ZoomableImage/>, <figure>, <img …>. Kept generic so
 # image-only wrappers don't leave empty scaffolding behind after component tags are removed.
@@ -73,55 +75,37 @@ def extract_title(md: str, fallback: str) -> str:
     return fallback
 
 
-def _sections(md: str) -> list[tuple[str | None, str]]:
-    sections: list[tuple[str | None, str]] = []
-    head: str | None = None
-    body: list[str] = []
-    in_fence = False
-    for line in md.splitlines():
-        if _FENCE.match(line):
-            in_fence = not in_fence
-            body.append(line)
-            continue
-        m = _HEADING.match(line)
-        if m and not in_fence:
-            if body:
-                sections.append((head, "\n".join(body).strip()))
-            head = _heading_text(m.group(2))
-            body = []
-        else:
-            body.append(line)
-    if body:
-        sections.append((head, "\n".join(body).strip()))
-    return sections
+_HEADERS_TO_SPLIT = [("#" * i, f"h{i}") for i in range(1, 7)]  # h1..h6
+# Chunk token budget (bge-small caps at 512): kept well under so Contextual Retrieval's context (~60 tok) +
+# the heading prefix + chunk still fits without truncation at embed time.
+_CHUNK_TOKENS = 400
+_OVERLAP_TOKENS = 80
+_CHUNK_CHARS = 1500  # char-based fallback (unit tests, or when no tokenizer is supplied)
+_OVERLAP_CHARS = 200
 
 
-def chunk_markdown(md: str, max_chars: int = 1200, overlap: int = 150) -> list[Chunk]:
-    """Heading-aware chunking: split into sections at markdown headings (ignoring headings inside code
-    fences), then window long sections with overlap, breaking at whitespace to avoid mid-word cuts.
-    Each chunk is prefixed with its heading for standalone context."""
+def _body_splitter(tokenizer) -> RecursiveCharacterTextSplitter:
+    if tokenizer is not None:  # budget by real embedding tokens
+        return RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+            tokenizer, chunk_size=_CHUNK_TOKENS, chunk_overlap=_OVERLAP_TOKENS
+        )
+    return RecursiveCharacterTextSplitter(chunk_size=_CHUNK_CHARS, chunk_overlap=_OVERLAP_CHARS)
+
+
+def chunk_markdown(md: str, tokenizer=None) -> list[Chunk]:
+    """Heading-aware chunking via LangChain splitters: split into sections at markdown headings (fenced-code
+    aware), then window long sections by token budget (falls back to a char budget without a tokenizer). The
+    section heading is prepended to each chunk for standalone context; sections with no body text are dropped."""
+    header_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=_HEADERS_TO_SPLIT, strip_headers=True)
+    body_splitter = _body_splitter(tokenizer)
     chunks: list[Chunk] = []
-    for section_head, section_body in _sections(md):
-        if not _has_text(section_body):  # drop image-only / scaffolding-only sections
+    for doc in header_splitter.split_text(md):
+        body = doc.page_content.strip()
+        if not _has_text(body):  # drop image-only / scaffolding-only sections (heading with no real body)
             continue
-        prefix = f"{section_head}\n\n" if section_head else ""
-        budget = max(200, max_chars - len(prefix))  # keep chunk within max_chars including the prefix
-        if len(section_body) <= budget:
-            chunks.append(Chunk(section_head, prefix + section_body))
-            continue
-        start, n = 0, len(section_body)
-        while start < n:
-            end = min(start + budget, n)
-            if end < n:  # break at the last whitespace before the boundary
-                brk = section_body.rfind(" ", start + 1, end)
-                if brk <= start:
-                    brk = section_body.rfind("\n", start + 1, end)
-                if brk > start:
-                    end = brk
-            piece = section_body[start:end].strip()
-            if piece:
-                chunks.append(Chunk(section_head, prefix + piece))
-            if end >= n:
-                break
-            start = max(end - overlap, start + 1)
+        section = next((doc.metadata[k] for k in ("h6", "h5", "h4", "h3", "h2", "h1") if k in doc.metadata), None)
+        prefix = f"{section}\n\n" if section else ""
+        for piece in body_splitter.split_text(body):
+            if _has_text(piece):
+                chunks.append(Chunk(section, prefix + piece))
     return chunks
