@@ -18,15 +18,17 @@ extraction, refusal, human-in-the-loop clarification) plus tool-calling agents f
 ```
                        ┌─ wallet line ────→ extract address/ENS ─→ wallet_agent ─→ [Morpho positions, balance]
 user ─→ guard_scope ─→ ┤ tx line ─────────→ extract tx hash ────→ tx_agent ─────→ [Explorer, LI.FI status, Morpho]
-     (intent+protocol) ┤ knowledge line ──→ knowledge_answer (retrieve + answer) → [grounded answer + sources]
+     (intent+protocol) ┤ knowledge line ──→ knowledge_answer (rewrite → hybrid retrieve → answer) → [answer + sources]
                        └─ out of scope ───→ refuse
 ```
 
 - **Scope guard** (structured output) classifies intent (wallet / transaction / knowledge) and, for concept
   questions, the protocol; it refuses anything outside the supported scope, chains, or protocols.
-- **Knowledge line (RAG):** conceptual questions (no address/hash) retrieve protocol-scoped chunks from a pgvector
-  store (cosine top-k=5) and answer **only** from them, citing sources and saying so when the docs don't cover it.
-  Retrieved text is passed as data (never as instructions) and the answer streams token-by-token like the other lines.
+- **Knowledge line (RAG):** conceptual questions (no address/hash) are rewritten into a standalone query (resolving
+  follow-up pronouns), retrieved via **hybrid search** — dense pgvector cosine + BM25 (pg_search), fused with
+  Reciprocal Rank Fusion — protocol-scoped and top-k=5, then answered **only** from the retrieved chunks, citing
+  sources and saying so when the docs don't cover it. Retrieved text is passed as data (never as instructions) and
+  the answer streams token-by-token like the other lines.
 - **Missing input** (no address/hash) triggers an `interrupt()` that asks the user, then resumes.
 - **Cards from tool artifacts:** tools return a human string for the LLM *and* a structured artifact; the API emits a
   `card` SSE event so the frontend renders a `LifiStatusCard` / `MorphoPositionsCard`.
@@ -36,13 +38,15 @@ user ─→ guard_scope ─→ ┤ tx line ─────────→ extrac
 ## Stack
 
 - **Backend:** Python 3.11 · [uv](https://docs.astral.sh/uv/) · LangGraph + `langchain-deepseek`
-  (deepseek-v4-flash for routing/guard, deepseek-v4-pro for analysis) · FastAPI + SSE · web3 · httpx
-- **Storage:** PostgreSQL — LangGraph Postgres checkpointer (durable conversations + interrupt resume), business
-  tables (`users` / `api_keys` / `threads`), and a `doc_chunks` **pgvector** table (HNSW cosine index) via
-  SQLAlchemy + Alembic
-- **RAG:** on-device embeddings ([`bge-small`](https://huggingface.co/BAAI/bge-small-en-v1.5), 384-dim, via
-  `sentence-transformers`) — no embedding API calls; docs are vendored under `docs/` (a version-controlled markdown
-  mirror of the LI.FI & Morpho sites) and cleaned of MDX/HTML noise at ingest time
+  (deepseek-v4-flash for routing/guard/query-rewrite/context, deepseek-v4-pro for analysis) · FastAPI + SSE · web3 · httpx
+- **Storage:** [ParadeDB](https://www.paradedb.com/) Postgres (pgvector + pg_search) — LangGraph Postgres
+  checkpointer (durable conversations + interrupt resume), business tables (`users` / `api_keys` / `threads`), and a
+  `doc_chunks` table with an HNSW cosine index (dense) and a BM25 index (lexical) via SQLAlchemy + Alembic
+- **RAG:** docs are vendored under `docs/` (a version-controlled markdown mirror of the LI.FI & Morpho sites),
+  cleaned of MDX/HTML noise, split with LangChain's token-aware markdown splitter, and enriched with
+  **Contextual Retrieval** (an LLM writes a short context per chunk before embedding). Embeddings are on-device
+  ([`bge-small`](https://huggingface.co/BAAI/bge-small-en-v1.5), 384-dim, via `sentence-transformers`) — no
+  embedding API calls; retrieval is hybrid dense + BM25 fused with RRF
 - **Frontend:** Next.js (App Router) + React — vendored card UI in `web/chat-ui/`, consumes the SSE stream
 - **Observability:** LangSmith tracing · structured JSON logs · `audit_log` table · routing eval
 
@@ -59,10 +63,10 @@ cp .env.example .env
 #   DATABASE_URL=postgresql+asyncpg://postgres@localhost:5432/defi_agent
 #   LANGGRAPH_PG_DSN=postgresql://postgres@localhost:5432/defi_agent
 
-# 3. Migrations — business tables + the pgvector doc_chunks store
+# 3. Migrations — business tables + the doc_chunks store (pgvector + BM25 indexes)
 uv run alembic upgrade head
 
-# 4. Ingest the vendored LI.FI & Morpho docs (docs/) into pgvector
+# 4. Ingest the vendored LI.FI & Morpho docs (docs/): chunk, generate per-chunk contexts (LLM), embed, index
 #    (downloads bge-small on first run; re-runnable/idempotent). Refresh the corpus with fetch_docs.py.
 uv run python scripts/ingest_docs.py
 ```
@@ -127,7 +131,7 @@ app/
   main.py            # FastAPI app (lifespan, SSE, auth, identity, embedder warmup)
   config.py          # settings (models, endpoints)
   agent/             # graph.py, state.py, prompts.py, checkpointer.py, tools/
-    knowledge/       # RAG: embed.py (bge-small), store.py (pgvector search), ingest.py (chunking)
+    knowledge/       # RAG: embed.py, ingest.py (chunking), context.py (contextual retrieval), store.py (hybrid search)
   api/               # identity (three-way auth), SIWE auth
   chains/            # chain registry (5 chains) + web3 clients
   storage/           # SQLAlchemy models (incl. doc_chunks), engine, repo
