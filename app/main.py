@@ -113,7 +113,9 @@ async def _event_stream(graph, payload, config, thread_id: str, identity: Identi
             if mode == "messages":
                 chunk, meta = data
                 is_agent = meta.get("langgraph_node") in _AGENT_NODES
-                if is_agent and getattr(chunk, "type", "") in ("ai", "AIMessageChunk"):
+                # Skip internal LLM calls tagged not-for-streaming (e.g. the knowledge line's query rewrite).
+                is_internal = "query_rewrite" in (meta.get("tags") or [])
+                if is_agent and not is_internal and getattr(chunk, "type", "") in ("ai", "AIMessageChunk"):
                     text = _text_of(chunk.content)
                     if text:
                         yield _sse("token", {"text": text})

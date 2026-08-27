@@ -185,9 +185,16 @@ async def _rewrite_query(messages) -> str:
     """Rewrite the latest question into a standalone, retrieval-friendly query using recent context
     (resolves follow-up pronouns). Falls back to the raw question on any failure so retrieval never breaks."""
     raw = _last_human_text(messages)
+    # First turn: nothing to resolve, and rewriting only adds variance (and can drop key terms) — use the raw question.
+    if sum(1 for m in messages if getattr(m, "type", "") in ("human", "ai")) <= 1:
+        return raw
     try:
         llm = ChatDeepSeek(model=settings.light_model, temperature=0)
-        out = await llm.ainvoke([_system(QUERY_REWRITE_PROMPT), HumanMessage(content=_recent_transcript(messages))])
+        # Tag this internal call so the SSE layer doesn't stream the rewritten query as if it were the answer.
+        out = await llm.ainvoke(
+            [_system(QUERY_REWRITE_PROMPT), HumanMessage(content=_recent_transcript(messages))],
+            config={"tags": ["query_rewrite"]},
+        )
         rewritten = str(out.content).strip()
     except Exception:  # noqa: BLE001  a rewrite failure must not break retrieval
         logger.exception("query rewrite failed")
@@ -204,14 +211,17 @@ async def knowledge_answer(state: AgentState) -> dict:
         logger.exception("doc retrieval failed")
         chunks = []
     context = format_context(chunks)
-    # Retrieved docs go in a human message (not the system block) so untrusted text can't override the guardrails.
     grounding = (
-        f"Retrieved documentation — answer using only this:\n\n{context}"
+        f"Reference documentation — use ONLY this to answer:\n\n{context}"
         if context
-        else "No documentation was retrieved for this question."
+        else "No documentation was retrieved."
     )
+    # Put the question and the retrieved docs in ONE human message (question first, docs as reference below) so
+    # the model always sees the question; the docs stay in a human message (not system) and are treated as data.
+    question = _last_human_text(state["messages"])
+    turn = HumanMessage(content=f"Question: {question}\n\n{grounding}")
     llm = ChatDeepSeek(model=settings.agent_model, temperature=0)
-    messages = [_system(KNOWLEDGE_SYSTEM), HumanMessage(content=grounding), *state["messages"]]
+    messages = [_system(KNOWLEDGE_SYSTEM), *state["messages"][:-1], turn]
     return {"messages": [await llm.ainvoke(messages)]}
 
 

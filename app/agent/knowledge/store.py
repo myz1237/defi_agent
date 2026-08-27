@@ -48,19 +48,22 @@ async def _dense_ids(session, qvec: list[float], protocol: str | None) -> list[i
 
 
 async def _bm25_ids(session, query: str, protocol: str | None) -> list[int]:
-    """BM25 over title/context/content via pg_search. Returns [] if pg_search is unavailable or the query
-    can't be parsed, so hybrid falls back to dense-only."""
+    """BM25 over title/context/content via pg_search's paradedb.match — which treats the query as terms, so
+    colons and other Tantivy query-syntax characters are safe. Runs in a savepoint and returns [] on any
+    failure, so a BM25 error falls back to dense-only WITHOUT poisoning the surrounding transaction."""
     scope = "AND protocol = :protocol" if (protocol or "").lower() in _SCOPED else ""
     sql = text(
-        "SELECT id FROM doc_chunks "
-        f"WHERE (title @@@ :q OR context @@@ :q OR content @@@ :q) {scope} "
+        "SELECT id FROM doc_chunks WHERE ("
+        "id @@@ paradedb.match('title', :q) OR id @@@ paradedb.match('context', :q) "
+        f"OR id @@@ paradedb.match('content', :q)) {scope} "
         "ORDER BY paradedb.score(id) DESC LIMIT :n"
     )
     params: dict = {"q": query, "n": _CANDIDATES}
     if scope:
         params["protocol"] = protocol.lower()
     try:
-        return list((await session.execute(sql, params)).scalars().all())
+        async with session.begin_nested():  # savepoint: a BM25 failure rolls back only this, not the dense query
+            return list((await session.execute(sql, params)).scalars().all())
     except Exception:  # noqa: BLE001  BM25 is best-effort; dense still carries the search
         logger.exception("BM25 search failed; falling back to dense-only")
         return []

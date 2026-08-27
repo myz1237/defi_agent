@@ -100,30 +100,47 @@ def test_recent_transcript_takes_last_n_and_labels_roles():
     assert "Assistant: a1" in t and "User: q2" in t and "q1" not in t
 
 
-def test_rewrite_query_returns_model_output(monkeypatch):
+# A multi-turn history (so rewrite actually fires; single-turn is skipped by design).
+_FOLLOWUP = [
+    HumanMessage(content="What is Morpho liquidation?"),
+    AIMessage(content="It repays unhealthy positions."),
+    HumanMessage(content="how does it get triggered"),
+]
+
+
+def test_rewrite_query_skips_first_turn(monkeypatch):
+    # First turn has no context to resolve — return the raw question WITHOUT calling the LLM.
+    class _BoomLLM:
+        async def ainvoke(self, _msgs, **_kw):
+            raise AssertionError("LLM should not be called on the first turn")
+
+    monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _BoomLLM())
+    assert asyncio.run(_rewrite_query([HumanMessage(content="What is Morpho Blue?")])) == "What is Morpho Blue?"
+
+
+def test_rewrite_query_returns_model_output_on_followup(monkeypatch):
     class _LLM:
-        async def ainvoke(self, _msgs):
-            return AIMessage(content="  Morpho Blue liquidation trigger conditions  ")
+        async def ainvoke(self, _msgs, **_kw):
+            return AIMessage(content="  Morpho liquidation trigger conditions  ")
 
     monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _LLM())
-    out = asyncio.run(_rewrite_query([HumanMessage(content="how does it get triggered")]))
-    assert out == "Morpho Blue liquidation trigger conditions"
+    assert asyncio.run(_rewrite_query(_FOLLOWUP)) == "Morpho liquidation trigger conditions"
 
 
 def test_rewrite_query_falls_back_to_raw_on_error_or_empty(monkeypatch):
     class _BoomLLM:
-        async def ainvoke(self, _msgs):
+        async def ainvoke(self, _msgs, **_kw):
             raise RuntimeError("provider down")
 
     monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _BoomLLM())
-    assert asyncio.run(_rewrite_query([HumanMessage(content="raw question")])) == "raw question"
+    assert asyncio.run(_rewrite_query(_FOLLOWUP)) == "how does it get triggered"
 
     class _EmptyLLM:
-        async def ainvoke(self, _msgs):
+        async def ainvoke(self, _msgs, **_kw):
             return AIMessage(content="   ")
 
     monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _EmptyLLM())
-    assert asyncio.run(_rewrite_query([HumanMessage(content="raw question")])) == "raw question"
+    assert asyncio.run(_rewrite_query(_FOLLOWUP)) == "how does it get triggered"
 
 
 def test_guard_scope_fails_closed_on_bad_output(monkeypatch):
