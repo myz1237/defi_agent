@@ -68,9 +68,9 @@ uv run python scripts/ingest_docs.py
 ```
 
 > **pgvector requirement:** the knowledge line needs the `vector` extension. The bundled
-> `pgvector/pgvector:pg16` image ships it, and the migration runs `CREATE EXTENSION IF NOT EXISTS vector`
-> (needs a superuser the first time — the default `postgres` role qualifies; on managed Postgres, enable the
-> pgvector extension for the database first).
+> `paradedb/paradedb` image ships `pgvector` (plus `pg_search` for BM25 hybrid search), and the migration runs
+> `CREATE EXTENSION IF NOT EXISTS vector` (needs a superuser the first time — the default `postgres` role
+> qualifies; on managed Postgres, enable the pgvector extension for the database first).
 
 ### Run it
 

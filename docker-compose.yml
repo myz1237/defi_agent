@@ -1,7 +1,7 @@
 # Local-dev Postgres (trust auth, bound to 127.0.0.1 only). For production, set a password and restrict networking.
 services:
   postgres:
-    image: pgvector/pgvector:pg16  # Postgres 16 with the pgvector extension preinstalled
+    image: paradedb/paradedb:latest  # Postgres + pgvector + pg_search (BM25) for hybrid search
     container_name: defi-agent-pg
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust   # passwordless for local dev; never use in production
@@ -10,7 +10,7 @@ services:
     ports:
       - "127.0.0.1:5432:5432"            # bind to localhost only (avoid exposure under trust auth)
     volumes:
-      - pgdata:/var/lib/postgresql/data  # named volume for persistence
+      - pgdata:/var/lib/postgresql  # named volume (PG18+ layout: data lives in a version subdir here)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d defi_agent"]
       interval: 5s
