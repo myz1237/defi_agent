@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # DeepSeek models: flash for routing/guard (fast/cheap), pro for protocol analysis/rendering.
     # Override via env (GUARD_MODEL / AGENT_MODEL) if the DeepSeek model IDs differ.
     guard_model: str = "deepseek-v4-flash"
+    light_model: str = "deepseek-v4-flash"
     agent_model: str = "deepseek-v4-pro"
 
     # Protocol API endpoints

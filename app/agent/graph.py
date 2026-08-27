@@ -19,7 +19,14 @@ from pydantic import BaseModel, Field
 import app.agent.tools  # noqa: F401  trigger tool registration
 from app.agent.knowledge import store
 from app.agent.knowledge.store import RetrievedChunk
-from app.agent.prompts import GUARD_PROMPT, KNOWLEDGE_SYSTEM, REFUSE_TEXT, TX_SYSTEM, WALLET_SYSTEM
+from app.agent.prompts import (
+    GUARD_PROMPT,
+    KNOWLEDGE_SYSTEM,
+    QUERY_REWRITE_PROMPT,
+    REFUSE_TEXT,
+    TX_SYSTEM,
+    WALLET_SYSTEM,
+)
 from app.agent.state import AgentState
 from app.agent.tools.explorer import get_balances, resolve_ens
 from app.agent.tools.registry import get_tools
@@ -161,10 +168,38 @@ def format_context(chunks: list[RetrievedChunk]) -> str:
     return "\n\n".join(blocks)
 
 
-async def knowledge_answer(state: AgentState) -> dict:
-    """Direct RAG: retrieve protocol-scoped chunks and answer only from them."""
+def _recent_transcript(messages, n: int = 5) -> str:
+    """The last n human/assistant turns as a labelled transcript (each capped) for query rewriting."""
+    lines = []
+    for m in messages[-n:]:
+        role = getattr(m, "type", "")
+        if role not in ("human", "ai"):
+            continue
+        text = (m.content if isinstance(m.content, str) else str(m.content)).strip()
+        if text:
+            lines.append(f"{'User' if role == 'human' else 'Assistant'}: {text[:500]}")
+    return "\n".join(lines)
+
+
+async def _rewrite_query(messages) -> str:
+    """Rewrite the latest question into a standalone, retrieval-friendly query using recent context
+    (resolves follow-up pronouns). Falls back to the raw question on any failure so retrieval never breaks."""
+    raw = _last_human_text(messages)
     try:
-        chunks = await store.search(_last_human_text(state["messages"]), protocol=state.get("protocol"), k=5)
+        llm = ChatDeepSeek(model=settings.light_model, temperature=0)
+        out = await llm.ainvoke([_system(QUERY_REWRITE_PROMPT), HumanMessage(content=_recent_transcript(messages))])
+        rewritten = str(out.content).strip()
+    except Exception:  # noqa: BLE001  a rewrite failure must not break retrieval
+        logger.exception("query rewrite failed")
+        return raw
+    return rewritten if 0 < len(rewritten) <= 300 else raw
+
+
+async def knowledge_answer(state: AgentState) -> dict:
+    """Direct RAG: rewrite the question for retrieval, fetch protocol-scoped chunks, answer only from them."""
+    query = await _rewrite_query(state["messages"])
+    try:
+        chunks = await store.search(query, protocol=state.get("protocol"), k=5)
     except Exception:  # noqa: BLE001  degrade rather than aborting the turn on a retrieval/infra failure
         logger.exception("doc retrieval failed")
         chunks = []

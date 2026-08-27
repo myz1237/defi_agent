@@ -1,8 +1,12 @@
-from langchain_core.messages import HumanMessage
+import asyncio
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 import app.agent.graph as graph_mod
 from app.agent.graph import (
     ScopeDecision,
+    _recent_transcript,
+    _rewrite_query,
     extract_tx,
     extract_wallet,
     format_context,
@@ -88,6 +92,38 @@ def test_guard_scope_maps_structured_decision(monkeypatch):
     monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _FakeLLM())
     out = guard_scope(_state("how does morpho liquidation work"))
     assert out == {"in_scope": True, "intent": "knowledge", "protocol": "morpho", "scope_reason": "concept q"}
+
+
+def test_recent_transcript_takes_last_n_and_labels_roles():
+    msgs = [HumanMessage(content="q1"), AIMessage(content="a1"), HumanMessage(content="q2")]
+    t = _recent_transcript(msgs, n=2)
+    assert "Assistant: a1" in t and "User: q2" in t and "q1" not in t
+
+
+def test_rewrite_query_returns_model_output(monkeypatch):
+    class _LLM:
+        async def ainvoke(self, _msgs):
+            return AIMessage(content="  Morpho Blue liquidation trigger conditions  ")
+
+    monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _LLM())
+    out = asyncio.run(_rewrite_query([HumanMessage(content="how does it get triggered")]))
+    assert out == "Morpho Blue liquidation trigger conditions"
+
+
+def test_rewrite_query_falls_back_to_raw_on_error_or_empty(monkeypatch):
+    class _BoomLLM:
+        async def ainvoke(self, _msgs):
+            raise RuntimeError("provider down")
+
+    monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _BoomLLM())
+    assert asyncio.run(_rewrite_query([HumanMessage(content="raw question")])) == "raw question"
+
+    class _EmptyLLM:
+        async def ainvoke(self, _msgs):
+            return AIMessage(content="   ")
+
+    monkeypatch.setattr(graph_mod, "ChatDeepSeek", lambda **_k: _EmptyLLM())
+    assert asyncio.run(_rewrite_query([HumanMessage(content="raw question")])) == "raw question"
 
 
 def test_guard_scope_fails_closed_on_bad_output(monkeypatch):

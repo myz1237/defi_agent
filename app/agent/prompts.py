@@ -33,6 +33,14 @@ REFUSE_TEXT = (
     "Please ask a different wallet-, transaction-, or protocol-concept question."
 )
 
+QUERY_REWRITE_PROMPT = (
+    "You rewrite the user's latest message into a single, self-contained search query for retrieving LI.FI and "
+    "Morpho protocol documentation. Use the conversation only for context: resolve pronouns and references to the "
+    "concrete subject from earlier turns. Keep the user's own key terms and proper names verbatim, do NOT add "
+    "topics the user did not ask about, and phrase the result as a concise declarative statement of what to look "
+    "up. Output ONLY the rewritten query on one line — no preamble, quotes, or explanation."
+)
+
 KNOWLEDGE_SYSTEM = (
     "You are a documentation assistant for the LI.FI and Morpho protocols. Answer the user's conceptual question "
     "USING ONLY the retrieved documentation provided in the conversation. Do not use outside knowledge or invent "
