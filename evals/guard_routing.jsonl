@@ -1,0 +1,20 @@
+{"inputs_1": "Show Morpho positions for 0x7b524b0308a776a7d4E65A2Db73bB37881818748", "outputs_1": "wallet"}
+{"inputs_1": "Does 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c have any Morpho debt?", "outputs_1": "wallet"}
+{"inputs_1": "What are vitalik.eth's balances?", "outputs_1": "wallet"}
+{"inputs_1": "Show my Morpho positions", "outputs_1": "wallet"}
+{"inputs_1": "check my balance", "outputs_1": "wallet"}
+{"inputs_1": "What is the health factor of 0x7b524b0308a776a7d4E65A2Db73bB37881818748?", "outputs_1": "wallet"}
+{"inputs_1": "How much native ETH does 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c hold on Base?", "outputs_1": "wallet"}
+{"inputs_1": "查一下 vitalik.eth 的余额", "outputs_1": "wallet"}
+{"inputs_1": "Is tx 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd cross-chain?", "outputs_1": "transaction"}
+{"inputs_1": "Decode transaction 0x18505dfe414ab0e347d4d174217737c41d5b84db3bd6a6af3af6f0cff37b3367", "outputs_1": "transaction"}
+{"inputs_1": "Show the receipt logs for tx 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd", "outputs_1": "transaction"}
+{"inputs_1": "What is the LI.FI status of 0x18505dfe414ab0e347d4d174217737c41d5b84db3bd6a6af3af6f0cff37b3367?", "outputs_1": "transaction"}
+{"inputs_1": "I bridged an hour ago, can you check that transfer for me?", "outputs_1": "transaction"}
+{"inputs_1": "Which contract did 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd interact with?", "outputs_1": "transaction"}
+{"inputs_1": "How does Morpho liquidation work?", "outputs_1": "knowledge"}
+{"inputs_1": "What is LLTV?", "outputs_1": "knowledge"}
+{"inputs_1": "How does the AdaptiveCurveIRM decide interest rates?", "outputs_1": "knowledge"}
+{"inputs_1": "Morpho 的清算是怎么触发的?", "outputs_1": "knowledge"}
+{"inputs_1": "What does a PENDING LI.FI transfer status mean?", "outputs_1": "knowledge"}
+{"inputs_1": "What is the difference between LI.FI's /quote and /advanced/routes?", "outputs_1": "knowledge"}

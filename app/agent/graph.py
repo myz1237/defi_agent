@@ -260,13 +260,16 @@ def build_graph() -> StateGraph:
 
     b.add_edge("knowledge_answer", END)
 
+    # Clarify loops back to the GUARD, not to the extractor: the user may answer a clarification with an
+    # entirely different question, and re-guarding re-routes them instead of re-asking the same thing forever
+    # (a thread wedged on the interrupt, with intent/protocol frozen at the first turn).
     b.add_conditional_edges("extract_wallet", has_address, {"yes": "wallet_agent", "no": "clarify_wallet"})
-    b.add_edge("clarify_wallet", "extract_wallet")
+    b.add_edge("clarify_wallet", "guard")
     b.add_conditional_edges("wallet_agent", tools_condition, {"tools": "wallet_tools", END: END})
     b.add_edge("wallet_tools", "wallet_agent")
 
     b.add_conditional_edges("extract_tx", has_tx, {"yes": "tx_agent", "no": "clarify_tx"})
-    b.add_edge("clarify_tx", "extract_tx")
+    b.add_edge("clarify_tx", "guard")
     b.add_conditional_edges("tx_agent", tools_condition, {"tools": "tx_tools", END: END})
     b.add_edge("tx_tools", "tx_agent")
     return b

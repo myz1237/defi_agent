@@ -1,0 +1,20 @@
+{"inputs_1": "Show Morpho positions for 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "Does 0x7b524b0308a776a7d4E65A2Db73bB37881818748 have any Morpho debt?", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "Is 0x7b524b0308a776a7d4E65A2Db73bB37881818748 at risk of liquidation?", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "What is the health factor of 0x7b524b0308a776a7d4E65A2Db73bB37881818748?", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "What is 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c borrowing on Morpho?", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "What collateral has 0x7b524b0308a776a7d4E65A2Db73bB37881818748 posted?", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "查一下 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c 的 Morpho 持仓", "outputs_1": "morpho_get_positions"}
+{"inputs_1": "How much native ETH does 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c hold?", "outputs_1": "get_balances"}
+{"inputs_1": "How much BNB does 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c hold on BNB Chain?", "outputs_1": "get_balances"}
+{"inputs_1": "Native balance of 0x7b524b0308a776a7d4E65A2Db73bB37881818748 on Base", "outputs_1": "get_balances"}
+{"inputs_1": "Does 0x7b524b0308a776a7d4E65A2Db73bB37881818748 have any ETH left for gas?", "outputs_1": "get_balances"}
+{"inputs_1": "0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c balance on Optimism", "outputs_1": "get_balances"}
+{"inputs_1": "Show me everything about 0x7b524b0308a776a7d4E65A2Db73bB37881818748", "outputs_1": "morpho_get_positions,get_balances"}
+{"inputs_1": "0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c", "outputs_1": "morpho_get_positions,get_balances"}
+{"inputs_1": "Full portfolio for 0x7b524b0308a776a7d4E65A2Db73bB37881818748", "outputs_1": "morpho_get_positions,get_balances"}
+{"inputs_1": "Is 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c healthy, and can it cover gas?", "outputs_1": "morpho_get_positions,get_balances"}
+{"inputs_1": "What are vitalik.eth's balances?", "outputs_1": "resolve_ens"}
+{"inputs_1": "Show the Morpho positions of defi-user.eth on Base", "outputs_1": "resolve_ens"}
+{"inputs_1": "my-wallet.eth full portfolio", "outputs_1": "resolve_ens"}
+{"inputs_1": "Is vitalik.eth borrowing anything on Morpho?", "outputs_1": "resolve_ens"}

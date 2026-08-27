@@ -1,0 +1,20 @@
+{"inputs_1": "Is tx 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd cross-chain?", "outputs_1": "lifi_get_status"}
+{"inputs_1": "What is the LI.FI status of 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd?", "outputs_1": "lifi_get_status"}
+{"inputs_1": "Did the bridge transfer 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd land on the destination chain?", "outputs_1": "lifi_get_status"}
+{"inputs_1": "Was 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd refunded?", "outputs_1": "lifi_get_status"}
+{"inputs_1": "My bridge is stuck, check 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd", "outputs_1": "lifi_get_status"}
+{"inputs_1": "0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd 到账了吗", "outputs_1": "lifi_get_status"}
+{"inputs_1": "Decode transaction 0x18505DFE414AB0E347D4D174217737C41D5B84DB3BD6A6AF3AF6F0CFF37B3367", "outputs_1": "decode_transaction"}
+{"inputs_1": "Which method was called in 0x18505DFE414AB0E347D4D174217737C41D5B84DB3BD6A6AF3AF6F0CFF37B3367?", "outputs_1": "decode_transaction"}
+{"inputs_1": "What are the calldata arguments of 0x18505DFE414AB0E347D4D174217737C41D5B84DB3BD6A6AF3AF6F0CFF37B3367?", "outputs_1": "decode_transaction"}
+{"inputs_1": "Decode the input of 0xefb4dc79dc72b1df1d13edd2a4727594b1a1a8aff3c5ca6792a0ce1068f87d88", "outputs_1": "decode_transaction"}
+{"inputs_1": "Show the receipt logs for 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd", "outputs_1": "get_transaction_receipt_logs"}
+{"inputs_1": "Did 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd emit any events?", "outputs_1": "get_transaction_receipt_logs"}
+{"inputs_1": "Which Transfer events did 0xefb4dc79dc72b1df1d13edd2a4727594b1a1a8aff3c5ca6792a0ce1068f87d88 produce?", "outputs_1": "get_transaction_receipt_logs"}
+{"inputs_1": "Did 0xefb4dc79dc72b1df1d13edd2a4727594b1a1a8aff3c5ca6792a0ce1068f87d88 succeed or revert?", "outputs_1": "get_transaction_receipt_logs"}
+{"inputs_1": "What happened in tx 0x18505DFE414AB0E347D4D174217737C41D5B84DB3BD6A6AF3AF6F0CFF37B3367?", "outputs_1": "get_transaction"}
+{"inputs_1": "What was the gas price of 0x18505DFE414AB0E347D4D174217737C41D5B84DB3BD6A6AF3AF6F0CFF37B3367?", "outputs_1": "get_transaction"}
+{"inputs_1": "Who sent 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd and to which contract?", "outputs_1": "get_transaction"}
+{"inputs_1": "How much value did 0xefb4dc79dc72b1df1d13edd2a4727594b1a1a8aff3c5ca6792a0ce1068f87d88 carry?", "outputs_1": "get_transaction"}
+{"inputs_1": "Give me the full breakdown of 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd including its cross-chain status", "outputs_1": "get_transaction,lifi_get_status"}
+{"inputs_1": "Explain 0x18505DFE414AB0E347D4D174217737C41D5B84DB3BD6A6AF3AF6F0CFF37B3367 end to end: what it called and whether it bridged", "outputs_1": "decode_transaction,lifi_get_status"}

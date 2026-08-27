@@ -1,0 +1,20 @@
+{"inputs_1": "What is LLTV?", "outputs_1": "morpho"}
+{"inputs_1": "How does Morpho liquidation work?", "outputs_1": "morpho"}
+{"inputs_1": "What does the AdaptiveCurveIRM target?", "outputs_1": "morpho"}
+{"inputs_1": "Explain the roles in a Morpho Vault V2", "outputs_1": "morpho"}
+{"inputs_1": "How does a Morpho market price collateral against the loan asset?", "outputs_1": "morpho"}
+{"inputs_1": "What is bad debt and who absorbs it?", "outputs_1": "morpho"}
+{"inputs_1": "Can I create a lending market without a governance vote?", "outputs_1": "morpho"}
+{"inputs_1": "Morpho 的健康因子怎么算?", "outputs_1": "morpho"}
+{"inputs_1": "What does a PENDING transfer status mean?", "outputs_1": "lifi"}
+{"inputs_1": "What is the difference between /quote and /advanced/routes?", "outputs_1": "lifi"}
+{"inputs_1": "What is the default slippage per step?", "outputs_1": "lifi"}
+{"inputs_1": "How is price impact calculated and when is it filtered?", "outputs_1": "lifi"}
+{"inputs_1": "What are intents and how do solvers fill them?", "outputs_1": "lifi"}
+{"inputs_1": "Why did my swap revert with 'Return amount is not enough'?", "outputs_1": "lifi"}
+{"inputs_1": "跨链转账卡在 PENDING 是什么原因?", "outputs_1": "lifi"}
+{"inputs_1": "Do LI.FI and Morpho both publish their audit reports?", "outputs_1": "both"}
+{"inputs_1": "Compare the bug bounty programs of LI.FI and Morpho", "outputs_1": "both"}
+{"inputs_1": "Which of LI.FI and Morpho uses immutable contracts?", "outputs_1": "both"}
+{"inputs_1": "Show Morpho positions for 0x0d49928a6037b35b0bdbc82b439d7c5d108bee9c", "outputs_1": "none"}
+{"inputs_1": "Is tx 0x7459b8d8fa53ca8d9d3fbcb835b28cedb12f0fb34bdd4dcb5579a8ebb87a1abd cross-chain?", "outputs_1": "none"}

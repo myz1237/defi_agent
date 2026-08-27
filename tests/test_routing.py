@@ -1,6 +1,8 @@
 import asyncio
 
 from langchain_core.messages import AIMessage, HumanMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
 import app.agent.graph as graph_mod
 from app.agent.graph import (
@@ -177,3 +179,55 @@ def test_has_helpers():
     assert has_address({}) == "no"
     assert has_tx({"tx_hash": "0x1"}) == "yes"
     assert has_tx({}) == "no"
+
+
+def _graph_with_stubbed_llm(monkeypatch):
+    """Build the real graph with every LLM-backed node stubbed, so routing can be tested without network."""
+
+    def fake_guard(state):
+        text = graph_mod._last_human_text(state["messages"])
+        return {
+            "in_scope": True,
+            "intent": "wallet" if ".eth" in text else "transaction",
+            "protocol": "none",
+            "scope_reason": "stub",
+        }
+
+    monkeypatch.setattr(graph_mod, "guard_scope", fake_guard)
+    monkeypatch.setattr(graph_mod, "resolve_ens_address", lambda _n: "0x" + "a" * 40)
+    monkeypatch.setattr(graph_mod, "wallet_agent", lambda _s: {"messages": [AIMessage(content="wallet done")]})
+    monkeypatch.setattr(graph_mod, "tx_agent", lambda _s: {"messages": [AIMessage(content="tx done")]})
+    return graph_mod.build_graph().compile(checkpointer=InMemorySaver())
+
+
+def test_clarify_reroutes_when_answered_with_a_different_question(monkeypatch):
+    """Answering a clarification with an unrelated question must re-guard and re-route.
+
+    Regression: clarify_* used to loop back to the extractor, so the thread stayed wedged on the same
+    interrupt forever with intent/protocol frozen at the first turn.
+    """
+    g = _graph_with_stubbed_llm(monkeypatch)
+    cfg = {"configurable": {"thread_id": "reroute"}}
+
+    out = g.invoke({"messages": [HumanMessage(content="Check LIFI tx status 0x1231")]}, cfg)
+    assert out["__interrupt__"], "a too-short hash should trigger the clarify interrupt"
+    assert g.get_state(cfg).next == ("clarify_tx",)
+
+    g.invoke(Command(resume="check myz1237.eth Morpho position"), cfg)
+    state = g.get_state(cfg)
+    assert state.next == ()  # the run completed instead of interrupting again
+    assert state.values["intent"] == "wallet"  # guard re-ran on the new question
+    assert state.values["messages"][-1].content == "wallet done"
+
+
+def test_clarify_proceeds_when_answered_with_the_missing_hash(monkeypatch):
+    g = _graph_with_stubbed_llm(monkeypatch)
+    cfg = {"configurable": {"thread_id": "answered"}}
+
+    g.invoke({"messages": [HumanMessage(content="Check LIFI tx status 0x1231")]}, cfg)
+    g.invoke(Command(resume="0x" + "b" * 64), cfg)
+
+    state = g.get_state(cfg)
+    assert state.next == ()
+    assert state.values["tx_hash"] == "0x" + "b" * 64
+    assert state.values["messages"][-1].content == "tx done"
